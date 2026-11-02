@@ -79,11 +79,11 @@ select throws_ok(
 reset role;
 set local role service_role;
 select throws_ok(
-    $update public.audit_events set event_type = 'tampered-by-service' where event_id = 'aaaaaaaa-3000-4000-8000-000000000001'$,
+    'update public.audit_events set event_type = ''tampered-by-service'' where event_id = ''aaaaaaaa-3000-4000-8000-000000000001''',
     '42501', null, 'service role cannot update append-only audit evidence'
 );
 select throws_ok(
-    $delete from public.audit_events where event_id = 'aaaaaaaa-3000-4000-8000-000000000001'$,
+    'delete from public.audit_events where event_id = ''aaaaaaaa-3000-4000-8000-000000000001''',
     '42501', null, 'service role cannot delete append-only audit evidence'
 );
 
