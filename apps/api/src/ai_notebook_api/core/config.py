@@ -16,7 +16,7 @@ class Settings:
     auth_audience: str | None = None
 
     @classmethod
-    def from_environment(cls) -> "Settings":
+    def from_environment(cls) -> Settings:
         return cls(
             app_env=os.getenv("APP_ENV", "development").lower(),
             database_url=os.getenv("DATABASE_URL") or None,
