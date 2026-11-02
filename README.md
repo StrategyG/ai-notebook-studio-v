@@ -1,6 +1,6 @@
 # AI Notebook Studio V5.1 — Android hardening branch
 
-This repository contains the Android WebView shell and bundled AI Notebook Studio interface. Branch `production-hardening-v1` adds a safer WebView boundary, Android release defaults, source assets, and CI quality gates.
+This repository contains the Android WebView shell for AI Notebook Studio. Branch `production-hardening-v1` adds a safer WebView boundary, Android release defaults, launcher resources, and CI quality gates. **The original `index.html` and `docs.html` from the supplied ZIP are still not present in this repository**, so the app will not display its full V5 UI until those assets are added.
 
 ## Build locally
 
