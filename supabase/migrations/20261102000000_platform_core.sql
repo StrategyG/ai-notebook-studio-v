@@ -193,6 +193,24 @@ create index if not exists approvals_project_status_idx on public.approvals(tena
 create index if not exists artifacts_project_created_idx on public.artifacts(tenant_id, project_id, created_at desc);
 create index if not exists audit_events_project_time_idx on public.audit_events(tenant_id, project_id, occurred_at desc);
 
+-- Audit evidence is append-only, including for privileged application roles.
+create or replace function private.reject_audit_event_mutation()
+returns trigger
+language plpgsql
+set search_path = ''
+as $
+begin
+    raise exception 'audit_events are append-only; UPDATE and DELETE are forbidden'
+        using errcode = '42501';
+end;
+$;
+
+revoke all on function private.reject_audit_event_mutation() from public, anon, authenticated;
+
+create trigger audit_events_append_only
+    before update or delete on public.audit_events
+    for each row execute function private.reject_audit_event_mutation();
+
 -- Security-definer helpers are narrowly scoped, use a fixed search_path and
 -- read only membership tables. They avoid recursive RLS policy evaluation.
 create or replace function private.is_tenant_member(p_tenant_id uuid)
