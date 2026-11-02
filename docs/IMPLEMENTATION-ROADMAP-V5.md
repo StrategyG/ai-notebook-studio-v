@@ -1,6 +1,6 @@
 # V5.0 implementation roadmap and stage gates
 
-**Current position:** Stage 0 static discovery completed; Stage 1 not started.  
+**Current position:** Stage 0 static discovery completed; Stage 1 backend/domain skeleton partially implemented.  
 **Release decision:** NO-GO.
 
 ## Stage 0 — Discovery and baseline
@@ -26,6 +26,8 @@ Build only the shared foundation needed by all workspaces:
 8. Add transactional outbox, correlation IDs and SSE state updates.
 9. Add provider/integration secret storage abstraction, encryption and rotation design.
 10. Add feature flags, structured logs, OpenTelemetry traces and health endpoints.
+
+**Initial implementation committed:** `apps/api` contains the FastAPI shell, task contract/FSM, permission intersection, action-bound approval evidence, DAG validation, agent descriptor, event envelope and liveness/readiness endpoints. Local evidence: 25 tests pass at 93.78% statement coverage on Python 3.13.5. A Python 3.12 CI workflow is committed but its first run is still pending verification. There is no database, JWT verifier, durable audit/outbox, auth/session route or external integration yet.
 
 **Exit criteria:** tenant-isolation tests, auth lifecycle, audit/approval tests, migration reset tests, responsive workspace shell and reproducible CI all pass.
 
@@ -144,3 +146,10 @@ Some implementation can proceed in parallel after the platform foundation provid
 ## Score discipline
 
 The 9.0–9.3/10 target is a desired outcome, not a design score. Every score increase must be backed by actual test evidence, integration evidence, operational telemetry or independent review. Build success alone cannot increase functional or production-readiness scores.
+
+
+## Stage 1 progress snapshot (2026-11-02)
+
+**Status: PARTIAL — domain/API skeleton only.** The initial code is committed at `ca6ae2402333edec51dff76bfb3808b372c60649`. See [Stage 1 foundation status](STAGE-1-FOUNDATION.md).
+
+The domain library is deliberately separate from persistence and transports: the task/agent/event types are not yet database entities, A2A wire messages or MCP requests. The API readiness endpoint checks configuration shape only. Do not deploy it as a ready production service.
