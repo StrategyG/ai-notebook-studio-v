@@ -73,6 +73,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            override fun onReceivedHttpError(
+                view: WebView,
+                request: WebResourceRequest,
+                errorResponse: WebResourceResponse
+            ) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                if (request.isForMainFrame) {
+                    findViewById<TextView>(R.id.page_error_view).visibility = View.VISIBLE
+                }
+            }
+
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
                 handler?.cancel() // Never bypass certificate errors.
             }
