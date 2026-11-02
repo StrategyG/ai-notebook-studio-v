@@ -1,68 +1,72 @@
-# AI Notebook Studio V5 — Static Assessment
+# AI Notebook Studio V5 — Institutional Baseline Assessment
 
 **Assessment date:** 2026-11-02  
-**Input:** `AI-Notebook-Studio-V5-APK-Project (1).zip`  
-**Target repository:** `StrategyG/ai-notebook-studio-v`
+**Source archive:** `AI-Notebook-Studio-V5-APK-Project (1).zip`  
+**Repository branch:** `production-hardening-v1`  
+**Assessment scope:** Static source/archive review, repository tree inspection, protocol-documentation review and observed GitHub Actions output. No user-owned external service credentials or deployed runtime were tested.
 
 ## Executive result
 
-**Preliminary score: 4.8/10 for production readiness.**  
-**Prototype/UI maturity: 7.0/10.**  
-This is a static source review only. No Android build, emulator test, penetration test, backend integration test, or runtime verification was performed. Scores are engineering estimates, not test results.
+- **Platform production-readiness estimate: 2.8/10.**
+- **UI presentation maturity: 6.5/10.**
+- **Android security/build foundation: materially improved, but not a complete platform.**
+- **Release decision: NO-GO.**
 
-## Package inventory
+The 9.0–9.3/10 figure in the product brief is a target, not an existing score. Scores in this document are engineering estimates and must be raised only by implementation and evidence.
 
-The archive contains 13 files: Gradle project configuration, Android manifest, two Kotlin activities, two layouts/resource XML files, and two HTML assets. The main HTML asset is a bundled React artifact (~268 KB); the documentation HTML is ~239 KB.
+## What the supplied source contains
 
-## Strengths
+The ZIP contains 13 files: Gradle configuration, Android manifest, two Kotlin activities, Android layouts/resources, and two standalone HTML artifacts. The main HTML is approximately 269 KB and the docs portal approximately 239 KB. There is no React source project, package manifest, TypeScript tree, backend, database migration, worker, or deployment descriptor in the ZIP.
 
-- Android project structure and Gradle configuration are present.
-- Main UI and documentation portal are bundled locally as assets.
-- Kotlin entry points are small and understandable.
-- App has a declared minimum SDK 24 and target SDK 34.
-- No obvious API key or credential literal was identified in the reviewed Kotlin/Gradle/manifest snippets.
+The main UI is a bundled React presentation artifact with ten visible workspace concepts. Static inspection found no operational fetch/Axios/XMLHttpRequest/WebSocket/EventSource/localStorage/IndexedDB integration in the main UI. Static connection indicators, agent counts, cost figures and quality scores are therefore not treated as production telemetry.
 
-## Blocking / high-priority findings
+## Original P0 security issues
 
-1. **WebView file-origin exposure — critical:** `allowFileAccessFromFileURLs` and `allowUniversalAccessFromFileURLs` are enabled. JavaScript is enabled in the same WebView. This combination can expose local file-origin data if untrusted content is ever loaded.
-2. **Mixed content — high:** `MIXED_CONTENT_ALWAYS_ALLOW` weakens transport security.
-3. **Unrestricted navigation — high:** `shouldOverrideUrlLoading` returns `false` for every URL, so the apparent local/external URL distinction does not enforce an allowlist or hand external links to a browser.
-4. **Cleartext traffic — high:** manifest sets `usesCleartextTraffic="true"`; use HTTPS and a restrictive network security configuration instead.
-5. **Missing launcher resources — build blocker:** manifest references `@mipmap/ic_launcher` and `@mipmap/ic_launcher_round`, but no mipmap/icon files are present in this 13-file archive.
-6. **No automated tests or CI evidence:** no test source files or workflow definitions are included.
-7. **Backend not wired / not verified:** README itself lists WebView bridge, BYOK vault, GitHub OAuth, and Supabase as future work. AI inference, persistence, identity, tenant isolation, and audit claims in the UI are not proof of working server-side controls.
-8. **Offline claim needs qualification:** the HTML includes external Google Fonts imports, so a fully offline visual experience is not guaranteed.
-9. **Backup policy needs review:** `allowBackup="true"` should be evaluated against any future notebook, credential, or user-data storage.
-10. **Release hardening absent:** no signing/release pipeline, dependency vulnerability checks, SBOM, crash reporting, or reproducible build evidence is included.
+The original Android WebView enabled JavaScript together with file-URL cross-origin access, file/content access and `MIXED_CONTENT_ALWAYS_ALLOW`. The original manifest allowed cleartext traffic and Android backup. Its navigation callback did not implement the intended allowlist. The manifest referenced launcher icons absent from the ZIP.
 
-## Recommended remediation order
+The hardening branch replaces the file origin with AndroidX WebViewAssetLoader, narrows local entry-point navigation, blocks non-local subresources, applies CSP, cancels SSL errors, disables file/content and cleartext access, disables backup, adds a native Demo/Offline disclosure, and supplies a missing-asset fallback.
 
-- P0: remove file-URL universal access; disable file access where possible; use `WebViewAssetLoader` or a tightly scoped local origin; enforce a navigation allowlist; block mixed content and cleartext.
-- P0: add the missing launcher icons and verify a clean Gradle build.
-- P1: implement backend authentication, server-side authorization and tenant isolation; keep provider secrets out of the APK; document the threat model.
-- P1: add unit/instrumentation tests and CI build + static analysis.
-- P2: pin/upgrade dependencies, add release signing and artifact provenance, add privacy/backup policy, and remove or locally bundle external font dependencies if offline operation is a requirement.
+## Current repository blockers
 
-## Scoring rubric
+- The original `app/src/main/assets/index.html` and `docs.html` are still absent from the Git branch.
+- Root `AI-Notebook-Studio-V5-React-Edition-FULL.html` is an 88-byte placeholder, not the supplied React bundle.
+- The original React/TypeScript source project is not included.
+- No application API/backend, AI provider gateway, BYOK vault, notebook persistence, Colab adapter, GitHub App, Supabase project schema, A2A gateway, MCP registry, agent orchestrator, policy engine or product observability service was found.
+- No Gradle Wrapper, signed APK/AAB pipeline, device matrix or penetration-test evidence is present.
 
-| Area | Estimate |
+## Verified CI evidence on prior hardening commit
+
+On commit `e135daae8d647b222aa3759df7411f235fcbab10`:
+- Android CI run [41404503229](https://github.com/StrategyG/ai-notebook-studio-v/actions/runs/41404503229) passed unit tests, lint, debug APK assembly, unsigned release APK assembly and artifact upload. The deliberate final gate failed because the two required HTML files were absent.
+- CodeQL run [41404503191](https://github.com/StrategyG/ai-notebook-studio-v/actions/runs/41404503191) succeeded using manual Gradle compilation.
+
+These results prove only the Android build/static analysis path on that commit. They do not prove the app UI package is complete, no device test was run, and the release artifact is unsigned. Runs on the later documentation commit are in progress and must be evaluated separately.
+
+## Baseline scorecard
+
+| Dimension | Estimate / 10 |
 |---|---:|
-| Project structure | 7.0/10 |
-| UI / presentation artifact | 7.5/10 |
-| Android implementation | 5.0/10 |
-| Security posture | 3.0/10 |
-| Backend / AI integration evidence | 2.0/10 |
-| Test / CI / release evidence | 1.5/10 |
-| Maintainability / documentation | 6.0/10 |
-| **Production readiness** | **4.8/10** |
+| Architecture completeness | 2.5 |
+| Functional completeness | 1.5 |
+| Security foundation | 6.0 |
+| Reliability evidence | 3.0 |
+| Performance evidence | 2.0 |
+| Maintainability | 3.0 |
+| AI quality/evaluation | 0.5 |
+| Agent interoperability | 0.0 |
+| UX/presentation | 6.5 |
+| Operational readiness | 1.0 |
+| **Overall platform readiness** | **2.8** |
 
-## Verification status
+## Required next work
 
-- Source archive inventory: inspected.
-- Kotlin, Gradle, manifest, and resource declarations: statically reviewed.
-- Repository baseline: contained one 88-byte HTML placeholder at the default branch when checked.
-- Android build: **NOT VERIFIED**.
-- Runtime behavior: **NOT VERIFIED**.
-- AI/backend correctness and security claims: **NOT VERIFIED**.
+1. Restore the original HTML assets and decide whether to recover or rebuild maintainable React source.
+2. Implement the platform foundation: identity, tenant/project authorization, persistence, task/approval/artifact/audit contracts.
+3. Implement real provider adapters and server-side credential management.
+4. Implement canonical notebook documents and independently owned runtime state.
+5. Integrate Colab through its documented MCP interface; do not treat it as a sandbox.
+6. Implement GitHub App and Supabase adapters with least privilege, RLS and migrations.
+7. Implement separate A2A agent delegation and MCP tool authorization layers.
+8. Add isolated repository execution, acceptance tests, observability, backup/restore and signed release process.
 
-**Conclusion:** suitable as a UI/Android prototype foundation after security fixes, but not ready to be described as production-ready. Do not publish a production APK until the P0 items and build/runtime tests pass.
+See [Stage 0 baseline audit](../docs/STAGE-0-BASELINE-AUDIT.md), [target architecture](../docs/PLATFORM-ARCHITECTURE-V5.md), [protocol/integration matrix](../docs/PROTOCOL-INTEGRATION-MATRIX.md), [acceptance tests](../docs/ACCEPTANCE-TEST-PLAN.md), [roadmap](../docs/IMPLEMENTATION-ROADMAP-V5.md) and [threat model](../docs/SECURITY-THREAT-MODEL-V5.md).

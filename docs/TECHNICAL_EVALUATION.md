@@ -1,47 +1,51 @@
-# Technical evaluation — AI Notebook Studio V5
+# Technical Evaluation — AI Notebook Studio V5
 
 **Review date:** 2026-11-02  
-**Input reviewed:** `AI-Notebook-Studio-V5-APK-Project (1).zip` and hardening branch source  
-**Review method:** Static source/config review plus observed GitHub Actions output. No mobile-device test, penetration test, provider/backend test, or signed-store build was performed.
+**Reviewed sources:** supplied Android ZIP and `production-hardening-v1`  
+**Method:** static review plus observed CI output. No Android device/emulator, live provider, Google Colab, GitHub App, Supabase project or independent A2A peer test was executed.
 
-## Current score (engineering estimate)
+## Current evaluation
 
-| Area | Score / 10 | Reason |
+| Area | Score / 10 | Evidence |
 |---|---:|---|
-| Original UI presentation | 7.5 | Polished single-file interface, but its visible states/data are static demo content. |
-| Android security foundation | 7.0 | WebViewAssetLoader, strict navigation allow-list, CSP/network denial, no bridge, no backup/cleartext. Needs device tests and independent review. |
-| Build & CI foundation | 7.0 | Unit tests, lint, debug and unsigned release builds observed passing on a commit; asset gate still fails. |
-| Architecture | 4.0 | Android WebView shell around a static frontend; no demonstrated production service/data/runtime layers. |
-| Functional completeness | 1.5 | No live AI providers, OAuth, cloud persistence, GitHub API workflows, or notebook execution verified. |
-| Production readiness | 3.0 | Assets are missing from branch; no backend, signed AAB, device test matrix, or complete release process. |
+| Original UI presentation | 6.5 | Polished single-file UI, static dashboard and feature states |
+| Android security foundation | 6.0 | WebViewAssetLoader, allowlist, restrictive CSP and network denial; device/penetration checks absent |
+| Build and CI foundation | 7.0 | Unit/lint/debug/unsigned-release stages passed on commit e135daae; asset gate still fails |
+| Architecture completeness | 2.5 | Android shell + bundled HTML only; no service/data/runtime layers |
+| Functional completeness | 1.5 | No operational AI, OAuth, cloud persistence, repository or notebook execution |
+| AI quality/evaluation | 0.5 | No evaluation harness or grounded model execution evidence |
+| Agent interoperability | 0.0 | No A2A/MCP implementation |
+| Operational readiness | 1.0 | No deployed backend, SLOs, telemetry, restore test or signed release |
+| **Overall platform readiness** | **2.8** | Conservative engineering estimate, not certification |
 
-Scores are subjective review estimates, not certification or automated security ratings. **Overall decision: NO-GO for production.**
+The target 9.0–9.3 score is not asserted as achieved.
 
-## Findings
+## What is verified
 
-### What improved
-The hardening branch replaces unsafe file-URL loading with AndroidX WebViewAssetLoader. File/content access, mixed content, browser storage, third-party cookies, popups, geolocation, and arbitrary URI schemes are disabled. Local page responses receive a restrictive CSP; all non-bundled subresources and redirects are blocked. External HTTP(S) clicks open in a browser and SSL errors are canceled. No JS-to-native bridge is exposed. Backup and cleartext HTTP are disabled. A native Demo/Offline banner and missing-assets fallback are present.
+- Source archive contains Android project configuration and two bundled HTML artifacts.
+- The original WebView configuration had unsafe file-origin and mixed-content settings; the hardening branch narrows WebView access and network behavior.
+- JUnit URL-policy tests, Android lint, debug APK and unsigned release APK build stages were observed passing on a prior hardening commit.
+- CodeQL Kotlin/Android analysis was observed successful after the workflow switched to explicit Gradle compilation.
+- The final HTML asset gate remains a blocker because the original two HTML assets are not in Git.
 
-### Frontend assets remain missing from Git
-The supplied ZIP includes `app/src/main/assets/index.html` and `app/src/main/assets/docs.html`, but the two files are still absent from the hardening branch. The app cannot show its intended V5 interface until both originals are committed and packaged. The final gate in CI deliberately detects this.
+## What is not verified or not implemented
 
-### No live backend or AI execution
-Static review of the supplied HTML found no operational fetch/Axios/XMLHttpRequest/WebSocket/localStorage flow. References to providers, OAuth, cloud integrations, agent states, and costs are presentation/demo material, not proof of functioning services. There is no verified provider adapter, authentication system, secure BYOK implementation, cloud database, notebook runtime, or service authorization layer.
+- Complete original UI source assets in the repository or final APK.
+- Maintainable React source project.
+- Live AI provider requests, model routing, streaming, BYOK, billing or budgets.
+- User authentication, project/tenant authorization or secret storage.
+- Notebook persistence/versioning/import/export.
+- Google Colab runtime/session/execution integration.
+- GitHub App authorization, repository modification or PR workflow within the product.
+- Supabase project/schema/RLS/migration integration.
+- A2A, MCP, multi-agent task orchestration or external agent compatibility.
+- Isolated repository execution, sandbox escape protection or egress control.
+- Responsive visual regression across the required viewport matrix.
+- Device instrumentation, accessibility, performance, backup/restore, crash/ANR or penetration tests.
+- Signed AAB/APK, release provenance or staged deployment.
 
-### CI evidence and limitations
-Android CI run [41402980821](https://github.com/StrategyG/ai-notebook-studio-v/actions/runs/41402980821) passed unit tests, lint, debug assembly, unsigned release assembly, and upload of debug/unsigned-release artifacts. It failed the deliberate final asset-existence gate. These artifacts do not contain the missing original UI and are not signed release packages. CodeQL automation is configured; its first autobuild attempt failed because the repository has no Gradle Wrapper, so the workflow was changed to use explicit manual Gradle compilation. Verify the newest CodeQL run before treating scanning as operational.
+## Current engineering decision
 
-## Production work still required
+**NO-GO for production release.** The Android wrapper has a better security/build foundation, but the application-level platform described in the master specification is not present yet. The new Stage 0 architecture, protocol, threat and acceptance documents are design deliverables only; they do not imply implementation completion.
 
-- Restore the original HTML assets byte-for-byte.
-- Implement real provider gateway, model routing, authenticated APIs, quotas, retries, audit logs, and safe error paths.
-- Protect API credentials using a reviewed Keystore/BYOK or server-side vault approach.
-- Implement OAuth/identity and object-level authorization.
-- Add encrypted notebook persistence, migrations, export/import, sync, conflict resolution.
-- Implement isolated notebook execution with resource limits and cancellation.
-- Add instrumentation/WebView UI tests, device matrix, accessibility/performance/security testing, crash and operational telemetry.
-- Add Gradle Wrapper, release signing, signed AAB and release provenance.
-
-## Final verdict
-
-The Android shell is materially safer and its build foundation is tested, but this is still a demo/offline frontend with missing source assets and no operational backend. **Do not publish or describe it as production-ready.**
+For detailed evidence, see [Stage 0 audit](STAGE-0-BASELINE-AUDIT.md), [architecture](PLATFORM-ARCHITECTURE-V5.md), [integration matrix](PROTOCOL-INTEGRATION-MATRIX.md), [test plan](ACCEPTANCE-TEST-PLAN.md) and [implementation roadmap](IMPLEMENTATION-ROADMAP-V5.md).
