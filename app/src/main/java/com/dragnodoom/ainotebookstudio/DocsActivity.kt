@@ -10,6 +10,9 @@ import android.webkit.WebView
 import android.webkit.WebResourceResponse
 import android.webkit.WebViewClient
 import android.widget.Toast
+import android.widget.TextView
+import android.widget.LinearLayout
+import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
 import androidx.webkit.WebViewAssetLoader
 
@@ -20,7 +23,22 @@ class DocsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         webView = WebView(this)
-        setContentView(webView)
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val demoBanner = TextView(this).apply {
+            text = getString(R.string.demo_mode_notice)
+            setTextColor(android.graphics.Color.WHITE)
+            textSize = 11f
+            setPadding(20, 12, 20, 12)
+            gravity = android.view.Gravity.CENTER
+            setBackgroundColor(android.graphics.Color.rgb(124, 45, 18))
+        }
+        root.addView(demoBanner, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        root.addView(webView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+        ))
+        setContentView(root)
         val loader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
@@ -28,6 +46,12 @@ class DocsActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
                 handler?.cancel()
+            }
+            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
+                super.onReceivedError(view, request, error)
+                if (request.isForMainFrame) {
+                    Toast.makeText(this@DocsActivity, R.string.page_load_error, Toast.LENGTH_LONG).show()
+                }
             }
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val local = loader.shouldInterceptRequest(request.url)
