@@ -1,9 +1,9 @@
 from uuid import UUID
 
-import jwt
-import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+import jwt
+import pytest
 
 from ai_notebook_api.core.config import Settings, get_settings
 from ai_notebook_api.main import app

@@ -5,9 +5,9 @@ from functools import lru_cache
 from typing import Annotated
 from uuid import UUID
 
-import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import jwt
 from jwt import PyJWKClient
 
 from ai_notebook_api.core.config import Settings, get_settings
