@@ -36,6 +36,7 @@ class DocsActivity : AppCompatActivity() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val local = loader.shouldInterceptRequest(request.url)
                 if (local != null) return local
+                if (request.isForMainFrame) return null
                 return WebResourceResponse(
                     "text/plain", "UTF-8", 403, "Blocked by app network policy",
                     emptyMap(), ByteArrayInputStream(ByteArray(0))
