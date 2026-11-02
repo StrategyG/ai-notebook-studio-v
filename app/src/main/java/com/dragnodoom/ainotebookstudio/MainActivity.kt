@@ -94,8 +94,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isTrustedAppUrl(uri: Uri): Boolean =
-        uri.scheme == "https" && uri.host == APP_HOST &&
-            (uri.path?.startsWith("/assets/") == true)
+        AppNavigationPolicy.isLocalAsset(uri.scheme, uri.host, uri.path)
 
     private fun openExternal(uri: Uri) {
         try {
