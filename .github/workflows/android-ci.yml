@@ -33,19 +33,27 @@ jobs:
         run: |
           yes | sdkmanager --licenses
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-      - name: Verify required bundled UI assets
-        run: |
-          test -s app/src/main/assets/index.html || (echo "::error::Missing app/src/main/assets/index.html from the V5 source ZIP"; exit 1)
-          test -s app/src/main/assets/docs.html || (echo "::error::Missing app/src/main/assets/docs.html from the V5 source ZIP"; exit 1)
       - name: Unit tests
         run: gradle testDebugUnitTest --no-daemon
       - name: Lint
         run: gradle lintDebug --no-daemon
       - name: Assemble debug APK
         run: gradle assembleDebug --no-daemon
+      - name: Assemble release APK (unsigned validation)
+        run: gradle assembleRelease --no-daemon
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: ai-notebook-studio-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+      - name: Upload unsigned release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-notebook-studio-release-unsigned
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+      - name: Verify required bundled UI assets
+        run: |
+          test -s app/src/main/assets/index.html || (echo "::error::Missing app/src/main/assets/index.html from the V5 source ZIP"; exit 1)
+          test -s app/src/main/assets/docs.html || (echo "::error::Missing app/src/main/assets/docs.html from the V5 source ZIP"; exit 1)
