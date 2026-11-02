@@ -1,7 +1,7 @@
 -- pgTAP authorization tests for the initial read-only client schema.
 -- Run with `supabase test db` against a disposable local Supabase database.
 begin;
-select plan(10);
+select plan(12);
 
 insert into auth.users (
     id, aud, role, email, encrypted_password,
