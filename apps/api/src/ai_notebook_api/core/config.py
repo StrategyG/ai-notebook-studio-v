@@ -6,6 +6,9 @@ from functools import lru_cache
 from urllib.parse import urlparse
 
 
+SUPPORTED_JWT_ALGORITHMS = frozenset({"RS256", "ES256"})
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     app_name: str = "AI Notebook Studio API"
@@ -14,15 +17,21 @@ class Settings:
     auth_jwks_url: str | None = None
     auth_issuer: str | None = None
     auth_audience: str | None = None
+    auth_algorithms: tuple[str, ...] = ("RS256",)
 
     @classmethod
     def from_environment(cls) -> Settings:
+        raw_algorithms = os.getenv("AUTH_ALGORITHMS", "RS256")
+        algorithms = tuple(
+            dict.fromkeys(item.strip().upper() for item in raw_algorithms.split(",") if item.strip())
+        )
         return cls(
             app_env=os.getenv("APP_ENV", "development").lower(),
             database_url=os.getenv("DATABASE_URL") or None,
             auth_jwks_url=os.getenv("AUTH_JWKS_URL") or None,
             auth_issuer=os.getenv("AUTH_ISSUER") or None,
             auth_audience=os.getenv("AUTH_AUDIENCE") or None,
+            auth_algorithms=algorithms,
         )
 
     @property
@@ -34,8 +43,14 @@ class Settings:
         return (
             jwks.scheme == "https"
             and bool(jwks.netloc)
+            and not jwks.username
+            and not jwks.password
             and issuer.scheme == "https"
             and bool(issuer.netloc)
+            and not issuer.username
+            and not issuer.password
+            and bool(self.auth_algorithms)
+            and set(self.auth_algorithms).issubset(SUPPORTED_JWT_ALGORITHMS)
         )
 
     @property
@@ -44,7 +59,8 @@ class Settings:
             return False
         parsed = urlparse(self.database_url)
         return (
-            parsed.scheme in {"postgres", "postgresql", "postgresql+psycopg", "postgresql+asyncpg"}
+            parsed.scheme
+            in {"postgres", "postgresql", "postgresql+psycopg", "postgresql+asyncpg"}
             and bool(parsed.netloc)
         )
 
