@@ -5,9 +5,9 @@ import pytest
 from sqlalchemy import create_engine, update
 from sqlalchemy.orm import Session
 
-from ai_notebook_studio.db.base import Base
-from ai_notebook_studio.db.models import AuditEvent
-from ai_notebook_studio.services.audit import append_audit_event, verify_audit_chain
+from ai_notebook_api.db.base import Base
+from ai_notebook_api.db.models import AuditEvent
+from ai_notebook_api.services.audit import append_audit_event, verify_audit_chain
 
 TENANT_A = UUID("d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e")
 TENANT_B = UUID("a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c")
