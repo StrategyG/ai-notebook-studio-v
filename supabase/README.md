@@ -1,27 +1,31 @@
-# Supabase database foundation — draft / NOT RUN
+# Supabase database foundation — CI-gated draft
 
-The migration under `migrations/` creates a first multi-tenant relational foundation for tenants/memberships, projects/memberships, workspace metadata, tasks/dependencies, approvals, artifact metadata, agent registry and audit events.
+The migration `migrations/20261102000000_platform_core.sql` creates the initial multi-tenant relational foundation for tenants/memberships, projects/memberships, workspace metadata, tasks/dependencies, approvals, artifact metadata, agent registry and audit events.
 
 ## Security intent
 
-- Client-facing table grants are `SELECT` only in this initial migration.
-- RLS limits reads by tenant/project membership; audit stream reads require project owner/admin.
-- No direct client insert/update/delete is provisioned. Writes are reserved for a server-side API that must implement user authorization before using the server credential.
-- `service_role` bypasses RLS and is privileged. It must never be shipped to browser/Android or exposed to agents. The API must not blindly forward user input under service-role authority.
-- The `private` SQL helpers are `SECURITY DEFINER`, have a fixed empty search path and use fully qualified table references. Review function ownership and execution grants during deployment.
+- Direct client table access is read-only in this initial schema.
+- RLS limits rows by tenant/project membership. Project membership rows are visible only to the member themselves or project owner/admin; audit-stream reads are project owner/admin only.
+- No direct client insert/update/delete is provisioned. Writes are reserved for a server-side API that must enforce user authorization before using a server credential.
+- `service_role` bypasses RLS and is privileged. It must never be shipped to browser/Android or exposed to agents. Backend code must not blindly forward user input under service-role authority.
+- The `private` SQL helpers are `SECURITY DEFINER`, use a fixed empty search path and fully qualified relation references. Function ownership and execution grants remain review items.
 
-## Test plan
+## Local CI
 
-A pgTAP RLS file is provided at `tests/database/rls.test.sql`. Run it only against a disposable local Supabase database after installing the Supabase CLI and starting the local stack:
+The repository includes a minimal `config.toml`, a pgTAP test suite and `.github/workflows/supabase-ci.yml`. GitHub Actions starts an isolated local Supabase stack, runs schema lint, then runs pgTAP:
 
 ```bash
 supabase start
-supabase db reset
-supabase test db
+supabase db lint --local --fail-on error
+supabase test db --local
 ```
 
-**Current status: NOT RUN.** This environment has no PostgreSQL server, `psql`, Docker or Supabase CLI. The migration and tests have not been syntactically validated by PostgreSQL, and RLS must not be considered proven until the test suite passes and an independent review checks the policies and privilege grants.
+CI uses no Supabase project ID, production password, access token or linked remote project. The local stack is disposable development infrastructure only.
+
+## Verification status
+
+**NOT RUN in this workspace.** This environment has no PostgreSQL server, Docker or Supabase CLI. The new GitHub Actions workflow is the first real execution attempt. Until the workflow completes successfully, migration syntax, RLS semantics and the pgTAP assertions remain **NOT VERIFIED**. Even after CI passes, independent security review and application-level tests through authenticated Supabase clients are still required.
 
 ## Deliberate limitations
 
-This migration does not yet include notebook documents, conversations, provider credentials, storage buckets/policies, transactional outbox, row-level task transition history, approval-consumption function, retention/backup configuration or auth configuration. Those require domain-specific design and integration tests. The initial migration is not a production deployment instruction.
+No notebook documents, conversations, provider credentials, storage buckets/policies, outbox, row-level task transition history, approval-consumption function, retention/backup policy or auth configuration for real users is included. The initial migration is not a production deployment instruction.
