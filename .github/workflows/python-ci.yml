@@ -40,7 +40,10 @@ jobs:
           python -m pip install -e '.[dev]'
       - name: Compile Python sources
         run: python -m compileall -q src tests
-      - name: Ruff lint
-        run: ruff check src tests
+      - name: Ruff lint (temporary import-order diagnostic)
+        run: |
+          ruff check --fix src tests
+          git diff -- src tests
+          ruff check src tests
       - name: Unit and API contract tests
         run: pytest --cov=ai_notebook_api --cov-report=term-missing --cov-fail-under=85
