@@ -198,12 +198,12 @@ create or replace function private.reject_audit_event_mutation()
 returns trigger
 language plpgsql
 set search_path = ''
-as $
+as $audit$
 begin
     raise exception 'audit_events are append-only; UPDATE and DELETE are forbidden'
         using errcode = '42501';
 end;
-$;
+$audit$;
 
 revoke all on function private.reject_audit_event_mutation() from public, anon, authenticated;
 
