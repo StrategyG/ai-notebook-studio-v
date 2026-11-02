@@ -4,8 +4,8 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import java.io.ByteArrayInputStream
+import android.net.http.SslError
+import android.webkit.SslErrorHandler
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -23,28 +23,19 @@ class DocsActivity : AppCompatActivity() {
         val loader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            allowFileAccess = false
-            allowContentAccess = false
-            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
-        }
+        SecureWebViewPolicy.configure(webView)
         webView.webViewClient = object : WebViewClient() {
+            override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                handler?.cancel()
+            }
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val local = loader.shouldInterceptRequest(request.url)
-                if (local != null) return local
-                if (request.isForMainFrame) return null
-                return WebResourceResponse(
-                    "text/plain", "UTF-8", 403, "Blocked by app network policy",
-                    emptyMap(), ByteArrayInputStream(ByteArray(0))
-                )
+                if (local != null) return SecureWebViewPolicy.secureAssetResponse(local)
+                return SecureWebViewPolicy.blockedResponse()
             }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
-                if (AppNavigationPolicy.isLocalAsset(uri.scheme, uri.host, uri.path)) return false
+                if (AppNavigationPolicy.isLocalAsset(uri.scheme, uri.host, uri.path, uri.port, uri.userInfo)) return false
                 if (uri.scheme == "https" || uri.scheme == "http") {
                     try {
                         startActivity(Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE))
