@@ -83,7 +83,6 @@ def append_audit_event(
         .where(AuditEvent.tenant_id == tenant_id)
         .order_by(AuditEvent.sequence.desc())
         .limit(1)
-        .with_for_update()
     )
     sequence = 1 if previous is None else previous.sequence + 1
     previous_hash = GENESIS_HASH if previous is None else previous.event_hash
