@@ -44,8 +44,7 @@ class DocsActivity : AppCompatActivity() {
             }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
-                if (uri.scheme == "https" && uri.host == "appassets.androidplatform.net" &&
-                    uri.path?.startsWith("/assets/") == true) return false
+                if (AppNavigationPolicy.isLocalAsset(uri.scheme, uri.host, uri.path)) return false
                 if (uri.scheme == "https" || uri.scheme == "http") {
                     try {
                         startActivity(Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE))
