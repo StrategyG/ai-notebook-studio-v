@@ -14,6 +14,8 @@
 - JUnit navigation-policy tests, Android lint, debug build and unsigned release validation.
 - CodeQL workflow in manual Gradle build mode.
 - Stage 0 baseline, architecture, protocol matrix, threat model, test plan, roadmap and ADR documents added.
+- Initial Stage 1 FastAPI domain/API skeleton committed: task state machine, effective grant intersection, action-bound approval evidence, DAG/delegation validation, internal agent descriptor, event envelope and fail-closed liveness/readiness endpoints.
+- Local Stage 1 verification: 25 Python tests passed with 93.78% statement coverage on Python 3.13.5. Python 3.12 GitHub Actions workflow is committed; its result is not yet verified.
 
 ## CI evidence
 
@@ -31,7 +33,7 @@ The supplied `index.html` and `docs.html` files are still absent from the branch
 
 ### 2. Platform foundation
 
-Implement backend authentication, tenant/project/workspace authorization, domain persistence, versioned API/event contracts, task/artifact/approval registries, append-oriented audit store, secret storage and observability.
+The first API/domain skeleton exists in `apps/api`, but it is not a deployed or authenticated backend. Implement real JWT/JWKS signature verification and principal construction, tenant/project/workspace authorization, domain persistence and migrations, RLS, task/artifact/approval persistence, atomic approval consumption, append-oriented audit store, transactional outbox, secret storage and observability.
 
 ### 3. AI and integrations
 
@@ -66,3 +68,8 @@ Do not change the decision from NO-GO until:
 - [Implementation roadmap](IMPLEMENTATION-ROADMAP-V5.md)
 - [Security threat model](SECURITY-THREAT-MODEL-V5.md)
 - [ADR-0001 modular monolith](adr/0001-modular-monolith.md)
+
+
+## Stage 1 status
+
+See [Stage 1 Foundation](STAGE-1-FOUNDATION.md). The local 25-test suite passed at 93.78% coverage. This does not verify Python CI, production authentication, database persistence, RLS or an operational API deployment. The readiness endpoint intentionally states that it only checks URL/configuration shape, not actual dependency health.
