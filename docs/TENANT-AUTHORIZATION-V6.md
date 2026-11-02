@@ -8,10 +8,12 @@
 - Tenant membership lookup keyed by the verified JWT subject and tenant UUID.
 - Membership status enforcement: only `active` membership is authorized.
 - The role returned to the API is read from authoritative database state, not trusted from JWT role claims.
+- Explicit tenant role-to-permission matrix and reusable permission dependency.
 - `GET /api/v1/tenant/context` demonstrates a tenant-protected endpoint.
 - PostgreSQL migration creates membership uniqueness constraints, status check, index, and forced row-level security.
 - Tenant context is set transaction-locally using PostgreSQL `set_config(..., true)` before the membership lookup.
-- SQLite-backed unit tests cover active, absent, cross-tenant and suspended memberships plus the API contract.
+- SQLite-backed unit tests cover active, absent, cross-tenant and suspended memberships plus permission enforcement.
+- GitHub Actions provisions PostgreSQL 16 and a non-owner, non-superuser, non-BYPASSRLS application role to test actual tenant row filtering.
 
 ## Database setup
 
@@ -25,12 +27,12 @@ The migration forces row-level security. Its policy uses the transaction-local `
 
 ## Important limitations
 
-- This increment does not provision a live PostgreSQL service or apply the migration to a production database.
-- CI exercises repository logic against SQLite; PostgreSQL RLS behavior still requires integration tests against a real PostgreSQL instance and the actual restricted runtime role.
-- There is not yet a trusted invitation/provisioning workflow, organization lifecycle, membership audit event, role-to-permission matrix, resource ownership checks, or revocation propagation.
-- SQLite unit tests do not emulate PostgreSQL row-level security.
-- The generic database session must not be used for tenant-owned business queries unless the caller establishes tenant context and the RLS policy is present.
+- This increment does not provision a live production PostgreSQL service or apply the migration to a production database.
+- CI validates RLS against PostgreSQL 16 using a restricted runtime role, while unit tests use SQLite for portable repository logic.
+- There is not yet a trusted invitation/provisioning workflow, organization lifecycle, membership audit event, resource ownership checks, or revocation propagation.
+- The RLS policy currently protects the tenant membership table only. Every future tenant-owned table must receive an equivalent policy and isolation tests.
+- The API does not yet include a durable role-change audit trail or role freshness cache invalidation because roles are resolved from the database per request.
 
 ## Release status
 
-**NO-GO.** The API now has a database-backed tenant membership authorization slice, but the full platform remains incomplete. Do not expose notebook, agent, provider, or repository resources until PostgreSQL integration tests, tenant-scoped resource models, audit controls, and authorization tests pass.
+**NO-GO.** The API now has a database-backed tenant membership authorization slice, but the full platform remains incomplete. Do not expose notebook, agent, provider, or repository resources until all tenant-owned tables have RLS, PostgreSQL integration tests, audit controls, and authorization tests.

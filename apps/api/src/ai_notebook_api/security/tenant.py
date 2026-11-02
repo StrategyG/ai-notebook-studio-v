@@ -16,6 +16,36 @@ class TenantAuthorizationError(ValueError):
     """The authenticated subject is not an active member of the requested tenant."""
 
 
+TENANT_ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
+    "owner": frozenset(
+        {
+            "tenant:read",
+            "tenant:manage",
+            "members:manage",
+            "projects:manage",
+            "notebooks:read",
+            "notebooks:write",
+            "agents:run",
+            "providers:manage",
+        }
+    ),
+    "admin": frozenset(
+        {
+            "tenant:read",
+            "members:manage",
+            "projects:manage",
+            "notebooks:read",
+            "notebooks:write",
+            "agents:run",
+            "providers:manage",
+        }
+    ),
+    "editor": frozenset({"tenant:read", "notebooks:read", "notebooks:write", "agents:run"}),
+    "member": frozenset({"tenant:read", "notebooks:read", "agents:run"}),
+    "viewer": frozenset({"tenant:read", "notebooks:read"}),
+}
+
+
 def resolve_active_membership(
     session: Session, *, subject: str, tenant_id: UUID
 ) -> TenantMembership:
@@ -45,3 +75,23 @@ def get_tenant_context(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Active tenant membership required",
         ) from exc
+
+
+def require_tenant_permissions(*required_permissions: str):
+    if not required_permissions or any(
+        not permission or len(permission) > 128 for permission in required_permissions
+    ):
+        raise ValueError("at least one valid tenant permission is required")
+
+    def dependency(
+        membership: Annotated[TenantMembership, Depends(get_tenant_context)],
+    ) -> TenantMembership:
+        granted = TENANT_ROLE_PERMISSIONS.get(membership.role, frozenset())
+        if not set(required_permissions).issubset(granted):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient tenant role permissions",
+            )
+        return membership
+
+    return dependency

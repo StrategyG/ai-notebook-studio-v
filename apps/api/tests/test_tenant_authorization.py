@@ -2,16 +2,22 @@ from collections.abc import Generator
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from ai_notebook_api.core.config import Settings
 from ai_notebook_api.db.base import Base
 from ai_notebook_api.db.models import TenantMembership
-from ai_notebook_api.db.session import get_tenant_session
+from ai_notebook_api.db.session import get_engine, get_tenant_session
 from ai_notebook_api.main import app
 from ai_notebook_api.security.auth import Principal, get_current_principal
-from ai_notebook_api.security.tenant import TenantAuthorizationError, resolve_active_membership
+from ai_notebook_api.security.tenant import (
+    TenantAuthorizationError,
+    require_tenant_permissions,
+    resolve_active_membership,
+)
 
 TENANT_A = UUID("d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e")
 TENANT_B = UUID("a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c")
@@ -37,7 +43,7 @@ def test_active_membership_is_resolved_from_database_not_token_roles(session: Se
         TenantMembership(
             tenant_id=TENANT_A,
             subject="user-1",
-            role="workspace_admin",
+            role="admin",
             status="active",
         )
     )
@@ -45,7 +51,7 @@ def test_active_membership_is_resolved_from_database_not_token_roles(session: Se
 
     membership = resolve_active_membership(session, subject="user-1", tenant_id=TENANT_A)
 
-    assert membership.role == "workspace_admin"
+    assert membership.role == "admin"
     assert membership.status == "active"
 
 
@@ -89,7 +95,7 @@ def test_tenant_context_endpoint_returns_database_role(session: Session) -> None
         TenantMembership(
             tenant_id=TENANT_A,
             subject="user-1",
-            role="workspace_admin",
+            role="admin",
             status="active",
         )
     )
@@ -109,7 +115,7 @@ def test_tenant_context_endpoint_returns_database_role(session: Session) -> None
     assert response.json() == {
         "tenant_id": str(TENANT_A),
         "subject": "user-1",
-        "role": "workspace_admin",
+        "role": "admin",
         "status": "active",
     }
 
@@ -126,3 +132,53 @@ def test_tenant_context_endpoint_denies_missing_membership(session: Session) -> 
         app.dependency_overrides.clear()
 
     assert response.status_code == 403
+
+
+def test_tenant_permission_dependency_uses_database_role(session: Session) -> None:
+    session.add(
+        TenantMembership(
+            tenant_id=TENANT_A,
+            subject="user-1",
+            role="viewer",
+            status="active",
+        )
+    )
+    session.commit()
+    membership = resolve_active_membership(session, subject="user-1", tenant_id=TENANT_A)
+
+    dependency = require_tenant_permissions("notebooks:write")
+    with pytest.raises(HTTPException) as error:
+        dependency(membership)
+    assert error.value.status_code == 403
+
+
+def test_tenant_permission_dependency_allows_owner(session: Session) -> None:
+    session.add(
+        TenantMembership(
+            tenant_id=TENANT_A,
+            subject="user-1",
+            role="owner",
+            status="active",
+        )
+    )
+    session.commit()
+    membership = resolve_active_membership(session, subject="user-1", tenant_id=TENANT_A)
+
+    dependency = require_tenant_permissions("members:manage", "providers:manage")
+    assert dependency(membership) is membership
+
+
+def test_engine_normalizes_postgresql_url_to_psycopg() -> None:
+    engine = get_engine("postgresql://user:password@localhost:5432/app")
+    try:
+        assert engine.url.drivername == "postgresql+psycopg"
+    finally:
+        engine.dispose()
+        get_engine.cache_clear()
+
+
+def test_tenant_session_fails_closed_without_database_configuration() -> None:
+    dependency = get_tenant_session(Settings())
+    with pytest.raises(HTTPException) as error:
+        next(dependency)
+    assert error.value.status_code == 503
