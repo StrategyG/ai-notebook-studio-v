@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, BigInteger, DateTime, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, DateTime, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ai_notebook_api.db.base import Base
@@ -72,3 +72,28 @@ class OutboxEvent(Base):
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ProviderCredential(Base):
+    __tablename__ = "provider_credentials"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "provider_id",
+            "label",
+            name="uq_provider_credentials_tenant_provider_label",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(index=True, nullable=False)
+    provider_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    label: Mapped[str] = mapped_column(String(64), nullable=False)
+    key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    nonce: Mapped[bytes] = mapped_column(LargeBinary(12), nullable=False)
+    encrypted_secret: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

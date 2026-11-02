@@ -21,7 +21,7 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
     try:
         with engine.connect() as connection:
             with connection.begin():
-                for table in ("tenant_memberships", "audit_events", "outbox_events"):
+                for table in ("tenant_memberships", "audit_events", "outbox_events", "provider_credentials"):
                     assert connection.execute(
                         text(f"SELECT tenant_id::text FROM {table}")
                     ).scalars().all() == []
@@ -31,7 +31,7 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
                     text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": tenant_a},
                 )
-                for table in ("tenant_memberships", "audit_events", "outbox_events"):
+                for table in ("tenant_memberships", "audit_events", "outbox_events", "provider_credentials"):
                     assert connection.execute(
                         text(f"SELECT tenant_id::text FROM {table}")
                     ).scalars().all() == [tenant_a]
@@ -41,7 +41,7 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
                     text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": tenant_b},
                 )
-                for table in ("tenant_memberships", "audit_events", "outbox_events"):
+                for table in ("tenant_memberships", "audit_events", "outbox_events", "provider_credentials"):
                     assert connection.execute(
                         text(f"SELECT tenant_id::text FROM {table}")
                     ).scalars().all() == [tenant_b]
@@ -64,6 +64,12 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
                         "(tenant_id, idempotency_key, event_type, aggregate_type, "
                         "aggregate_id, payload) VALUES (:tenant_id, 'cross-tenant', "
                         "'test', 'test', 'x', '{}'::jsonb)",
+                    ),
+                    (
+                        "provider_credentials",
+                        "(tenant_id, provider_id, label, key_id, nonce, encrypted_secret, "
+                        "created_by) VALUES (:tenant_id, 'openai', 'cross-tenant', 'ci', "
+                        "decode(repeat('00', 12), 'hex'), decode('01', 'hex'), 'user')",
                     ),
                 ):
                     try:
