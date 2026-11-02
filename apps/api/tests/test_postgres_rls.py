@@ -1,13 +1,18 @@
 import os
+import unittest
+from uuid import UUID
 
-import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.orm import Session
 
+from ai_notebook_api.services.audit import append_audit_event, verify_audit_chain
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
-pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="PostgreSQL RLS integration DB not configured")
+ADMIN_DATABASE_URL = os.getenv("TEST_ADMIN_DATABASE_URL")
 
 
+@unittest.skipUnless(DATABASE_URL, "PostgreSQL RLS integration DB not configured")
 def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     tenant_a = "d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e"
@@ -16,29 +21,93 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
     try:
         with engine.connect() as connection:
             with connection.begin():
-                rows_without_context = connection.execute(
+                assert connection.execute(
                     text("SELECT tenant_id::text FROM tenant_memberships")
-                ).scalars().all()
-                assert rows_without_context == []
+                ).scalars().all() == []
+                assert connection.execute(
+                    text("SELECT tenant_id::text FROM audit_events")
+                ).scalars().all() == []
 
             with connection.begin():
                 connection.execute(
                     text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": tenant_a},
                 )
-                rows_a = connection.execute(
+                assert connection.execute(
                     text("SELECT tenant_id::text FROM tenant_memberships")
-                ).scalars().all()
-                assert rows_a == [tenant_a]
+                ).scalars().all() == [tenant_a]
+                assert connection.execute(
+                    text("SELECT tenant_id::text FROM audit_events")
+                ).scalars().all() == [tenant_a]
 
             with connection.begin():
                 connection.execute(
                     text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": tenant_b},
                 )
-                rows_b = connection.execute(
+                assert connection.execute(
                     text("SELECT tenant_id::text FROM tenant_memberships")
-                ).scalars().all()
-                assert rows_b == [tenant_b]
+                ).scalars().all() == [tenant_b]
+                assert connection.execute(
+                    text("SELECT tenant_id::text FROM audit_events")
+                ).scalars().all() == [tenant_b]
+
+            with connection.begin():
+                connection.execute(
+                    text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
+                    {"tenant_id": tenant_a},
+                )
+                try:
+                    with connection.begin_nested():
+                        connection.execute(
+                            text(
+                                "INSERT INTO audit_events "
+                                "(tenant_id, sequence, actor_subject, action, resource_type, "
+                                "resource_id, request_id, payload, previous_hash, event_hash) "
+                                "VALUES (:tenant_id, 9, 'user', 'test', 'test', 'x', 'r', "
+                                "'{}'::jsonb, repeat('0', 64), repeat('1', 64))"
+                            ),
+                            {"tenant_id": tenant_b},
+                        )
+                except DBAPIError:
+                    pass
+                else:
+                    raise AssertionError("RLS accepted an insert for another tenant")
+
+        tenant_c = UUID("c5a19d50-9f30-4bde-9c6f-4a7d84b0d21c")
+        with Session(engine) as session:
+            event = append_audit_event(
+                session,
+                tenant_id=tenant_c,
+                actor_subject="rls-integration-user",
+                action="audit.integration_test",
+                resource_type="test",
+                resource_id="rls-test",
+                request_id="rls-request",
+                payload={"test": True},
+            )
+            session.commit()
+            assert event.sequence == 1
+            assert verify_audit_chain(session, tenant_id=tenant_c)
+    finally:
+        engine.dispose()
+
+
+@unittest.skipUnless(ADMIN_DATABASE_URL, "PostgreSQL admin DB not configured")
+def test_postgres_audit_trigger_rejects_update_and_delete() -> None:
+    engine = create_engine(ADMIN_DATABASE_URL, pool_pre_ping=True)
+    tenant_a = "d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e"
+    try:
+        with engine.connect() as connection:
+            for statement in (
+                "UPDATE audit_events SET action = 'tampered' WHERE tenant_id = :tenant_id",
+                "DELETE FROM audit_events WHERE tenant_id = :tenant_id",
+            ):
+                try:
+                    connection.execute(text(statement), {"tenant_id": tenant_a})
+                except DBAPIError:
+                    connection.rollback()
+                else:
+                    raise AssertionError("audit ledger mutation was not rejected")
     finally:
         engine.dispose()
