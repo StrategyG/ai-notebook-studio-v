@@ -64,6 +64,7 @@ class MainActivity : AppCompatActivity() {
                 val url = request.url
                 val local = assetLoader.shouldInterceptRequest(url)
                 if (local != null) return local
+                if (request.isForMainFrame) return null // Let navigation policy open external links in the browser.
                 // Offline-first policy: prevent remote subresources from silently exfiltrating data.
                 return WebResourceResponse(
                     "text/plain", "UTF-8", 403, "Blocked by app network policy",
