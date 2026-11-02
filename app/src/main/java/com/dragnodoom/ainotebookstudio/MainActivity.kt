@@ -1,55 +1,129 @@
 package com.dragnodoom.ainotebookstudio
 
-import android.os.Bundle
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.webkit.WebSettings
-import androidx.appcompat.app.AppCompatActivity
-import android.view.KeyEvent
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
+import android.net.http.SslError
+import android.os.Bundle
+import android.webkit.SslErrorHandler
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebResourceResponse
+import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.TextView
+import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.webkit.WebViewAssetLoader
 
+/** Secure, offline-first WebView shell. No JavaScript-to-native bridge is exposed. */
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
+    private lateinit var assetLoader: WebViewAssetLoader
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        webView = findViewById(R.id.webview)
-        val settings: WebSettings = webView.settings
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.allowFileAccess = true
-        settings.allowContentAccess = true
-        settings.allowFileAccessFromFileURLs = true
-        settings.allowUniversalAccessFromFileURLs = true
-        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        settings.cacheMode = WebSettings.LOAD_NO_CACHE
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+        assetLoader = WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
 
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                if (url != null && (url.startsWith("file://") || url.contains("ai-notebook"))) {
-                    return false
-                }
-                return false
-            }
+        webView = findViewById(R.id.webview)
+        configureWebView(webView)
+        findViewById<Button>(R.id.docs_button).setOnClickListener {
+            startActivity(Intent(this, DocsActivity::class.java))
         }
 
-        webView.loadUrl("file:///android_asset/index.html")
-
-        webView.setOnLongClickListener {
-            Toast.makeText(this, "Long press: Opening Docs Portal", Toast.LENGTH_SHORT).show()
-            startActivity(Intent(this, DocsActivity::class.java))
-            true
+        if (savedInstanceState == null) {
+            webView.loadUrl(APP_URL)
+        } else if (webView.restoreState(savedInstanceState) == null) {
+            webView.loadUrl(APP_URL)
         }
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
-            webView.goBack()
-            return true
+    private fun configureWebView(view: WebView) {
+        SecureWebViewPolicy.configure(view)
+        view.isSaveEnabled = true
+        view.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val url = request.url
+                val local = assetLoader.shouldInterceptRequest(url)
+                if (local != null) return SecureWebViewPolicy.secureAssetResponse(local)
+                // Block every non-bundled request, including unexpected main-frame redirects.
+                return SecureWebViewPolicy.blockedResponse()
+            }
+
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val uri = request.url
+                if (isTrustedAppUrl(uri)) return false
+                if (uri.scheme == "https" || uri.scheme == "http") openExternal(uri)
+                // Block file:, content:, javascript:, intent:, and unknown schemes.
+                return true
+            }
+
+            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                super.onReceivedError(view, request, error)
+                if (request.isForMainFrame) {
+                    findViewById<TextView>(R.id.page_error_view).visibility = View.VISIBLE
+                    Toast.makeText(this@MainActivity, R.string.page_load_error, Toast.LENGTH_LONG).show()
+                }
+            }
+
+            override fun onReceivedHttpError(
+                view: WebView,
+                request: WebResourceRequest,
+                errorResponse: WebResourceResponse
+            ) {
+                super.onReceivedHttpError(view, request, errorResponse)
+                if (request.isForMainFrame) {
+                    findViewById<TextView>(R.id.page_error_view).visibility = View.VISIBLE
+                }
+            }
+
+            override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                handler?.cancel() // Never bypass certificate errors.
+            }
         }
-        return super.onKeyDown(keyCode, event)
+    }
+
+    private fun isTrustedAppUrl(uri: Uri): Boolean =
+        AppNavigationPolicy.isLocalAsset(uri.scheme, uri.host, uri.path, uri.port, uri.userInfo)
+
+    private fun openExternal(uri: Uri) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+            })
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.no_browser_found, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        webView.saveState(outState)
+        super.onSaveInstanceState(outState)
+    }
+
+    @Deprecated("Deprecated in Android API; retained for minSdk compatibility")
+    override fun onBackPressed() {
+        if (::webView.isInitialized && webView.canGoBack()) webView.goBack() else super.onBackPressed()
+    }
+
+    override fun onDestroy() {
+        if (::webView.isInitialized) {
+            webView.stopLoading()
+            webView.webChromeClient = null
+            webView.removeAllViews()
+            webView.destroy()
+        }
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val APP_URL = "https://appassets.androidplatform.net/assets/index.html"
     }
 }
