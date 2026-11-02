@@ -1,11 +1,19 @@
 package com.dragnodoom.ainotebookstudio
 
-/** Pure URL policy shared by WebViews; no Android framework dependency. */
+/** Strict, framework-free allow-list for the app's two bundled HTML entry points. */
 internal object AppNavigationPolicy {
     private const val ASSET_HOST = "appassets.androidplatform.net"
 
-    fun isLocalAsset(scheme: String?, host: String?, path: String?): Boolean =
+    fun isLocalAsset(
+        scheme: String?,
+        host: String?,
+        path: String?,
+        port: Int = -1,
+        userInfo: String? = null
+    ): Boolean =
         scheme.equals("https", ignoreCase = true) &&
             host.equals(ASSET_HOST, ignoreCase = true) &&
-            path?.startsWith("/assets/") == true
+            port == -1 &&
+            userInfo.isNullOrEmpty() &&
+            (path == "/assets/index.html" || path == "/assets/docs.html")
 }
