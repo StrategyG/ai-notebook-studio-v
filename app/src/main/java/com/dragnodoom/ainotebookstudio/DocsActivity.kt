@@ -4,6 +4,8 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import java.io.ByteArrayInputStream
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -31,8 +33,14 @@ class DocsActivity : AppCompatActivity() {
             setSupportMultipleWindows(false)
         }
         webView.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest) =
-                loader.shouldInterceptRequest(request.url)
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val local = loader.shouldInterceptRequest(request.url)
+                if (local != null) return local
+                return WebResourceResponse(
+                    "text/plain", "UTF-8", 403, "Blocked by app network policy",
+                    emptyMap(), ByteArrayInputStream(ByteArray(0))
+                )
+            }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 if (uri.scheme == "https" && uri.host == "appassets.androidplatform.net" &&
