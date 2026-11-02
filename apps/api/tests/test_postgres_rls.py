@@ -21,58 +21,61 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
     try:
         with engine.connect() as connection:
             with connection.begin():
-                assert connection.execute(
-                    text("SELECT tenant_id::text FROM tenant_memberships")
-                ).scalars().all() == []
-                assert connection.execute(
-                    text("SELECT tenant_id::text FROM audit_events")
-                ).scalars().all() == []
+                for table in ("tenant_memberships", "audit_events", "outbox_events"):
+                    assert connection.execute(
+                        text(f"SELECT tenant_id::text FROM {table}")
+                    ).scalars().all() == []
 
             with connection.begin():
                 connection.execute(
                     text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": tenant_a},
                 )
-                assert connection.execute(
-                    text("SELECT tenant_id::text FROM tenant_memberships")
-                ).scalars().all() == [tenant_a]
-                assert connection.execute(
-                    text("SELECT tenant_id::text FROM audit_events")
-                ).scalars().all() == [tenant_a]
+                for table in ("tenant_memberships", "audit_events", "outbox_events"):
+                    assert connection.execute(
+                        text(f"SELECT tenant_id::text FROM {table}")
+                    ).scalars().all() == [tenant_a]
 
             with connection.begin():
                 connection.execute(
                     text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": tenant_b},
                 )
-                assert connection.execute(
-                    text("SELECT tenant_id::text FROM tenant_memberships")
-                ).scalars().all() == [tenant_b]
-                assert connection.execute(
-                    text("SELECT tenant_id::text FROM audit_events")
-                ).scalars().all() == [tenant_b]
+                for table in ("tenant_memberships", "audit_events", "outbox_events"):
+                    assert connection.execute(
+                        text(f"SELECT tenant_id::text FROM {table}")
+                    ).scalars().all() == [tenant_b]
 
             with connection.begin():
                 connection.execute(
                     text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": tenant_a},
                 )
-                try:
-                    with connection.begin_nested():
-                        connection.execute(
-                            text(
-                                "INSERT INTO audit_events "
-                                "(tenant_id, sequence, actor_subject, action, resource_type, "
-                                "resource_id, request_id, payload, previous_hash, event_hash) "
-                                "VALUES (:tenant_id, 9, 'user', 'test', 'test', 'x', 'r', "
-                                "'{}'::jsonb, repeat('0', 64), repeat('1', 64))"
-                            ),
-                            {"tenant_id": tenant_b},
-                        )
-                except DBAPIError:
-                    pass
-                else:
-                    raise AssertionError("RLS accepted an insert for another tenant")
+                for table, values in (
+                    (
+                        "audit_events",
+                        "(tenant_id, sequence, actor_subject, action, resource_type, "
+                        "resource_id, request_id, payload, previous_hash, event_hash) "
+                        "VALUES (:tenant_id, 9, 'user', 'test', 'test', 'x', 'r', "
+                        "'{}'::jsonb, repeat('0', 64), repeat('1', 64))",
+                    ),
+                    (
+                        "outbox_events",
+                        "(tenant_id, idempotency_key, event_type, aggregate_type, "
+                        "aggregate_id, payload) VALUES (:tenant_id, 'cross-tenant', "
+                        "'test', 'test', 'x', '{}'::jsonb)",
+                    ),
+                ):
+                    try:
+                        with connection.begin_nested():
+                            connection.execute(
+                                text(f"INSERT INTO {table} {values}"),
+                                {"tenant_id": tenant_b},
+                            )
+                    except DBAPIError:
+                        pass
+                    else:
+                        raise AssertionError(f"RLS accepted cross-tenant insert into {table}")
 
         tenant_c = UUID("c5a19d50-9f30-4bde-9c6f-4a7d84b0d21c")
         with Session(engine) as session:

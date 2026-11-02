@@ -77,7 +77,8 @@ jobs:
               connection.execute(
                   "GRANT USAGE ON SCHEMA public TO app_runtime; "
                   "GRANT SELECT ON tenant_memberships TO app_runtime; "
-                  "GRANT SELECT, INSERT ON audit_events TO app_runtime"
+                  "GRANT SELECT, INSERT ON audit_events TO app_runtime; "
+                  "GRANT SELECT, INSERT, UPDATE ON outbox_events TO app_runtime"
               )
               connection.execute(
                   "INSERT INTO tenant_memberships (tenant_id, subject, role, status) VALUES "
@@ -92,6 +93,12 @@ jobs:
                   "'a', 'req-a', '{}'::jsonb, repeat('0', 64), repeat('1', 64)), "
                   "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 1, 'user-b', 'test', 'test', "
                   "'b', 'req-b', '{}'::jsonb, repeat('0', 64), repeat('2', 64))"
+              )
+              connection.execute(
+                  "INSERT INTO outbox_events "
+                  "(tenant_id, idempotency_key, event_type, aggregate_type, aggregate_id) VALUES "
+                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 'seed-a', 'test', 'test', 'a'), "
+                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 'seed-b', 'test', 'test', 'b')"
               )
           PY
       - name: PostgreSQL row-level security and immutable audit integration tests
