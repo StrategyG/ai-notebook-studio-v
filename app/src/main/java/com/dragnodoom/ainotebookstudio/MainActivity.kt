@@ -9,6 +9,8 @@ import android.os.Bundle
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import java.io.ByteArrayInputStream
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -58,8 +60,16 @@ class MainActivity : AppCompatActivity() {
         }
         view.isSaveEnabled = true
         view.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest) =
-                assetLoader.shouldInterceptRequest(request.url)
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val url = request.url
+                val local = assetLoader.shouldInterceptRequest(url)
+                if (local != null) return local
+                // Offline-first policy: prevent remote subresources from silently exfiltrating data.
+                return WebResourceResponse(
+                    "text/plain", "UTF-8", 403, "Blocked by app network policy",
+                    emptyMap(), ByteArrayInputStream(ByteArray(0))
+                )
+            }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
