@@ -272,8 +272,12 @@ create policy tenant_memberships_select_self_or_admin on public.tenant_membershi
     using (user_id = (select auth.uid()) or private.has_tenant_role(tenant_id, array['owner', 'admin']));
 create policy projects_select_project_member on public.projects
     for select to authenticated using (private.is_project_member(tenant_id, id));
-create policy project_memberships_select_project_member on public.project_memberships
-    for select to authenticated using (private.is_project_member(tenant_id, project_id));
+create policy project_memberships_select_self_or_project_admin on public.project_memberships
+    for select to authenticated
+    using (
+        user_id = (select auth.uid())
+        or private.has_project_role(tenant_id, project_id, array['owner', 'admin'])
+    );
 create policy workspaces_select_project_member on public.workspaces
     for select to authenticated using (private.is_project_member(tenant_id, project_id));
 create policy tasks_select_project_member on public.tasks
