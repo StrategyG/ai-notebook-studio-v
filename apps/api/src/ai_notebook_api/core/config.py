@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from functools import lru_cache
-import os
 from urllib.parse import urlparse
-
 
 SUPPORTED_JWT_ALGORITHMS = frozenset({"RS256", "ES256"})
 
@@ -38,8 +37,11 @@ class Settings:
     def auth_configured(self) -> bool:
         if not all((self.auth_jwks_url, self.auth_issuer, self.auth_audience)):
             return False
-        jwks = urlparse(self.auth_jwks_url or "")
-        issuer = urlparse(self.auth_issuer or "")
+        try:
+            jwks = urlparse(self.auth_jwks_url or "")
+            issuer = urlparse(self.auth_issuer or "")
+        except ValueError:
+            return False
         return (
             jwks.scheme == "https"
             and bool(jwks.netloc)

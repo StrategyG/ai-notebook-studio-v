@@ -1,14 +1,19 @@
 from uuid import UUID
 
-from fastapi import HTTPException
-from fastapi.testclient import TestClient
 import jwt
 import pytest
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from ai_notebook_api.core.config import Settings, get_settings
 from ai_notebook_api.main import app
 from ai_notebook_api.security import auth
-from ai_notebook_api.security.auth import Principal, TokenVerificationError, verify_access_token
+from ai_notebook_api.security.auth import (
+    Principal,
+    TokenVerificationError,
+    require_scopes,
+    verify_access_token,
+)
 
 client = TestClient(app)
 TENANT_ID = "d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e"
@@ -57,7 +62,8 @@ def test_verifier_uses_allowlisted_algorithm_and_required_claim_validation(monke
             assert token == "signed-token"
             return FakeSigningKey()
 
-    monkeypatch.setattr(auth, "_jwks_client", lambda url: FakeJwksClient(url))
+    monkeypatch.setattr(auth, "PyJWKClient", FakeJwksClient)
+    auth._jwks_client.cache_clear()
     monkeypatch.setattr(jwt, "get_unverified_header", lambda _token: {"alg": "RS256"})
     observed = {}
 
@@ -74,6 +80,7 @@ def test_verifier_uses_allowlisted_algorithm_and_required_claim_validation(monke
 
     monkeypatch.setattr(jwt, "decode", fake_decode)
     principal = verify_access_token("signed-token", configured_settings())
+    auth._jwks_client.cache_clear()
 
     assert principal == Principal(
         subject="user-123",
@@ -118,8 +125,6 @@ def test_verifier_requires_tenant_claim(monkeypatch) -> None:
 
 
 def test_scope_dependency_rejects_missing_scope() -> None:
-    from ai_notebook_api.security.auth import require_scopes
-
     dependency = require_scopes("notebooks:write")
     principal = Principal(
         subject="user-123",
