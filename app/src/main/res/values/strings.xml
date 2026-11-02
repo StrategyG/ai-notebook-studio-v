@@ -1,3 +1,7 @@
 <resources>
-    <string name="app_name">AI Notebook Studio V5</string>
+    <string name="app_name">AI Notebook Studio</string>
+    <string name="docs_title">Documentation</string>
+    <string name="open_docs">Docs</string>
+    <string name="page_load_error">Unable to load this page. Please retry.</string>
+    <string name="no_browser_found">No browser available to open this link.</string>
 </resources>
