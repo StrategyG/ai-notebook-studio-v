@@ -20,6 +20,10 @@
 
 The target 9.0–9.3 score is not asserted as achieved.
 
+## Stage 1 backend skeleton update
+
+A minimal FastAPI/domain package now exists under `apps/api`. It defines task and agent contracts, a task transition state machine, grant intersection, action-bound approval evidence, bounded DAG validation, event metadata and basic health endpoints. Local verification passed 25 tests at 93.78% statement coverage using Python 3.13.5. The GitHub Python CI workflow targets Python 3.12 and is not yet verified. No production DB, JWT verifier, auth endpoints, durable audit/outbox, or integrations are present. This skeleton is not a connected backend and does not justify raising the overall platform readiness score.
+
 ## What is verified
 
 - Source archive contains Android project configuration and two bundled HTML artifacts.
