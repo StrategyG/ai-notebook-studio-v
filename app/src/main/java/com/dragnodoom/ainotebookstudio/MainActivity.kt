@@ -12,6 +12,8 @@ import android.webkit.WebView
 import android.webkit.WebResourceResponse
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.TextView
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.webkit.WebViewAssetLoader
@@ -66,6 +68,7 @@ class MainActivity : AppCompatActivity() {
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 super.onReceivedError(view, request, error)
                 if (request.isForMainFrame) {
+                    findViewById<TextView>(R.id.page_error_view).visibility = View.VISIBLE
                     Toast.makeText(this@MainActivity, R.string.page_load_error, Toast.LENGTH_LONG).show()
                 }
             }
