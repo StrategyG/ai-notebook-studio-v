@@ -8,8 +8,6 @@ import android.os.Bundle
 import android.webkit.SslErrorHandler
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import java.io.ByteArrayInputStream
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -26,6 +24,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
         assetLoader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
@@ -44,31 +43,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun configureWebView(view: WebView) {
-        view.settings.apply {
-            javaScriptEnabled = true // Required by the bundled React UI.
-            domStorageEnabled = true
-            allowFileAccess = false
-            allowContentAccess = false
-            javaScriptCanOpenWindowsAutomatically = false
-            setSupportMultipleWindows(false)
-            mediaPlaybackRequiresUserGesture = true
-            mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-            databaseEnabled = false
-            setGeolocationEnabled(false)
-        }
+        SecureWebViewPolicy.configure(view)
         view.isSaveEnabled = true
         view.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url
                 val local = assetLoader.shouldInterceptRequest(url)
-                if (local != null) return local
-                if (request.isForMainFrame) return null // Let navigation policy open external links in the browser.
-                // Offline-first policy: prevent remote subresources from silently exfiltrating data.
-                return WebResourceResponse(
-                    "text/plain", "UTF-8", 403, "Blocked by app network policy",
-                    emptyMap(), ByteArrayInputStream(ByteArray(0))
-                )
+                if (local != null) return SecureWebViewPolicy.secureAssetResponse(local)
+                // Block every non-bundled request, including unexpected main-frame redirects.
+                return SecureWebViewPolicy.blockedResponse()
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -93,7 +76,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isTrustedAppUrl(uri: Uri): Boolean =
-        AppNavigationPolicy.isLocalAsset(uri.scheme, uri.host, uri.path)
+        AppNavigationPolicy.isLocalAsset(uri.scheme, uri.host, uri.path, uri.port, uri.userInfo)
 
     private fun openExternal(uri: Uri) {
         try {
