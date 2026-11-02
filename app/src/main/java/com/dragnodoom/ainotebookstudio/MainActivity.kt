@@ -2,7 +2,6 @@ package com.dragnodoom.ainotebookstudio
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
@@ -127,7 +126,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val APP_HOST = "appassets.androidplatform.net"
         private const val APP_URL = "https://appassets.androidplatform.net/assets/index.html"
     }
 }
