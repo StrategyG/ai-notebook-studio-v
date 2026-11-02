@@ -41,3 +41,18 @@ Do not place API keys, GitHub tokens, Supabase service-role keys, OAuth secrets,
 5. Require passing Android CI and CodeQL on the exact release commit.
 
 See [Production Readiness](docs/PRODUCTION_READINESS.md), [Technical Evaluation](docs/TECHNICAL_EVALUATION.md), and [Security Policy](SECURITY.md).
+
+
+## V5.0 institutional transformation documents
+
+The engineering transformation is being developed in explicit stages. The Stage 0 baseline, target architecture, protocol/integration matrix, acceptance tests, implementation roadmap and threat model are documented here:
+
+- [Stage 0 Baseline Audit](docs/STAGE-0-BASELINE-AUDIT.md)
+- [Platform Architecture V5](docs/PLATFORM-ARCHITECTURE-V5.md)
+- [Protocol and Integration Matrix](docs/PROTOCOL-INTEGRATION-MATRIX.md)
+- [Acceptance Test Plan](docs/ACCEPTANCE-TEST-PLAN.md)
+- [Implementation Roadmap](docs/IMPLEMENTATION-ROADMAP-V5.md)
+- [Security Threat Model](docs/SECURITY-THREAT-MODEL-V5.md)
+- [ADR-0001: Modular Monolith](docs/adr/0001-modular-monolith.md)
+
+These are target specifications and audit deliverables, not claims that their proposed services are already implemented. Capability statuses remain explicit in the documents.
