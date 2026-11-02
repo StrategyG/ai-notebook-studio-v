@@ -1,7 +1,7 @@
 -- pgTAP authorization tests for the initial read-only client schema.
 -- Run with `supabase test db` against a disposable local Supabase database.
 begin;
-select extensions.plan(10);
+select plan(10);
 
 insert into auth.users (
     id, aud, role, email, encrypted_password,
@@ -49,29 +49,29 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claims', '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","aud":"authenticated"}', true);
 
-select extensions.is((select count(*) from public.projects), 1::bigint, 'member sees only the project they belong to');
-select extensions.is((select count(*) from public.tenants), 1::bigint, 'member sees only their tenant');
-select extensions.is((select count(*) from public.tenant_memberships), 1::bigint, 'member sees their own membership, not other tenant members');
-select extensions.is((select count(*) from public.tasks), 1::bigint, 'member sees tasks only in their project');
-select extensions.is((select count(*) from public.audit_events), 0::bigint, 'ordinary project member cannot read admin-only audit stream');
+select is((select count(*) from public.projects), 1::bigint, 'member sees only the project they belong to');
+select is((select count(*) from public.tenants), 1::bigint, 'member sees only their tenant');
+select is((select count(*) from public.tenant_memberships), 1::bigint, 'member sees their own membership, not other tenant members');
+select is((select count(*) from public.tasks), 1::bigint, 'member sees tasks only in their project');
+select is((select count(*) from public.audit_events), 0::bigint, 'ordinary project member cannot read admin-only audit stream');
 
 select set_config('request.jwt.claim.sub', '20000000-0000-4000-8000-000000000002', true);
 select set_config('request.jwt.claims', '{"sub":"20000000-0000-4000-8000-000000000002","role":"authenticated","aud":"authenticated"}', true);
-select extensions.is((select count(*) from public.projects), 1::bigint, 'second tenant sees only its own project');
+select is((select count(*) from public.projects), 1::bigint, 'second tenant sees only its own project');
 
 select set_config('request.jwt.claim.sub', '30000000-0000-4000-8000-000000000003', true);
 select set_config('request.jwt.claims', '{"sub":"30000000-0000-4000-8000-000000000003","role":"authenticated","aud":"authenticated"}', true);
-select extensions.is((select count(*) from public.projects), 0::bigint, 'unaffiliated user sees no projects');
+select is((select count(*) from public.projects), 0::bigint, 'unaffiliated user sees no projects');
 
-select extensions.throws_ok(
+select throws_ok(
     $$insert into public.audit_events (event_id, tenant_id, project_id, actor_type, actor_id, event_type, correlation_id, idempotency_key, aggregate_type, aggregate_id, aggregate_version) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', 'aaaaaaaa-1000-4000-8000-000000000001', 'user', 'x', 'test.write', gen_random_uuid(), 'forbidden-audit-write', 'task', 'x', 1)$$,
     '42501', null, 'authenticated client cannot insert audit evidence'
 );
-select extensions.throws_ok(
+select throws_ok(
     $$update public.audit_events set event_type = 'tampered' where event_id = 'aaaaaaaa-3000-4000-8000-000000000001'$$,
     '42501', null, 'authenticated client cannot mutate audit evidence'
 );
-select extensions.throws_ok(
+select throws_ok(
     $$insert into public.project_memberships (tenant_id, project_id, user_id, role) values ('aaaaaaaa-0000-4000-8000-000000000001', 'aaaaaaaa-1000-4000-8000-000000000001', '30000000-0000-4000-8000-000000000003', 'owner')$$,
     '42501', null, 'authenticated client cannot self-assign project privileges'
 );
