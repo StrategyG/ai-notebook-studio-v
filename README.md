@@ -1,58 +1,39 @@
-# AI Notebook Studio V5.1 — hardened Android demo shell
+# AI Notebook Studio V5 — Engineering transformation workspace
 
-Branch: `production-hardening-v1` · Current status: **NO-GO for production release**
+This branch is an incremental transformation of the Android prototype into the V5 institutional engineering platform. It must not be described as production-ready until its documented release gates pass.
 
-This repository branch hardens the Android WebView shell and its build pipeline. It is not yet the complete V5 application: the original `app/src/main/assets/index.html` and `docs.html` from the supplied source ZIP are still absent from this branch. The app therefore shows a safe missing-asset message until those exact files are restored.
+## Current stage status
 
-## What is implemented
+- **Stage 0 — static discovery and architecture baseline:** documented. No live third-party integration was claimed.
+- **Stage 1 — backend foundation:** initial FastAPI modular API skeleton added under `apps/api`. It includes typed task and agent contracts, task lifecycle rules, effective permission intersection, action-bound approval checks, DAG/delegation limits, event envelope metadata and readiness endpoints. This is a domain foundation, not a connected application backend.
+- **Stages 2–8:** not implemented. See `docs/IMPLEMENTATION-ROADMAP-V5.md`.
 
-- AndroidX `WebViewAssetLoader` serves the two local entry points from the reserved app-assets HTTPS origin.
-- File/content access, file-URL cross-origin access, mixed content, DOM storage, third-party cookies, popups, geolocation, and arbitrary URI schemes are disabled.
-- A restrictive Content Security Policy blocks all network connections, frames, forms, objects, and remote scripts/styles; only bundled UI scripts/styles and local/data/blob images are allowed.
-- Non-bundled WebView requests are blocked. User-clicked HTTP(S) links open in the system browser; SSL failures are canceled.
-- No JavaScript-to-native bridge is registered. The manifest has no INTERNET permission in this offline demo mode.
-- Android backup and cleartext HTTP are disabled. A native **DEMO / OFFLINE** banner warns that UI connection states and displayed data are simulated.
-- Main screen has a useful missing-asset error state and explicit Docs navigation.
-- JUnit navigation-policy tests; Android CI for unit tests, lint, debug APK, and unsigned release build validation.
-- CodeQL and Dependabot workflows are configured.
+## Documentation
 
-## Build locally
+- `docs/STAGE-0-BASELINE-AUDIT.md` — evidence-based repository inventory and baseline.
+- `docs/STAGE-1-FOUNDATION.md` — implemented skeleton, local test evidence and explicit gaps.
+- `docs/PLATFORM-ARCHITECTURE-V5.md` — proposed component boundaries and data ownership.
+- `docs/PROTOCOL-INTEGRATION-MATRIX.md` — A2A, MCP, Colab, GitHub and Supabase compatibility requirements.
+- `docs/SECURITY-THREAT-MODEL-V5.md` — initial trust boundaries and threat controls.
+- `docs/ACCEPTANCE-TEST-PLAN.md` — acceptance tests AT-01 through AT-18.
+- `docs/IMPLEMENTATION-ROADMAP-V5.md` — stage gates.
+- `docs/adr/0001-modular-monolith.md` — initial architecture decision.
 
-Requirements: JDK 17, Android SDK 35, and Gradle 8.9. This repository currently does not include the Gradle Wrapper.
+## API local development
 
 ```bash
-gradle testDebugUnitTest lintDebug assembleDebug assembleRelease
+cd apps/api
+python -m pip install -e ".[dev]"
+PYTHONPATH=src pytest
+uvicorn ai_notebook_api.main:app --app-dir src --reload
 ```
 
-The release build from CI is **unsigned validation only**. Debug and unsigned release artifacts are useful for engineering validation but are not publishable production APK/AABs.
+Readiness returns 503 until PostgreSQL and HTTPS identity configuration are present. Even then it is only a configuration-presence check until database connectivity and JWT verification are implemented. No business write routes are currently exposed.
 
-## Product functionality — not connected yet
+## Product status
 
-The frontend is a static/demo UI. No operational AI provider adapter, model execution service, secure BYOK vault, user authentication, GitHub OAuth, notebook persistence, cloud sync, or notebook kernel/runtime has been verified or implemented. Labels such as connected, agents, costs, and task states in the original UI must not be treated as live service status.
+The original Android branch still has missing HTML assets. The frontend remains demo/static; AI providers, BYOK, notebook persistence/execution, Colab, GitHub App, Supabase, A2A, MCP, real orchestration and governance backends are not yet implemented. Do not embed credentials in the client.
 
-Do not place API keys, GitHub tokens, Supabase service-role keys, OAuth secrets, or signing credentials in the APK or frontend bundle.
+## Release status
 
-## Release blockers
-
-1. Restore and verify the exact `index.html` and `docs.html` source assets in the Git branch.
-2. Implement and security-review real backend/provider execution, authentication/authorization, secure credential handling, persistence, and notebook runtime.
-3. Add WebView/device instrumentation tests and test critical user flows on supported Android versions.
-4. Add a Gradle Wrapper, protected release signing, signed AAB generation, SBOM/dependency review, and staged release verification.
-5. Require passing Android CI and CodeQL on the exact release commit.
-
-See [Production Readiness](docs/PRODUCTION_READINESS.md), [Technical Evaluation](docs/TECHNICAL_EVALUATION.md), and [Security Policy](SECURITY.md).
-
-
-## V5.0 institutional transformation documents
-
-The engineering transformation is being developed in explicit stages. The Stage 0 baseline, target architecture, protocol/integration matrix, acceptance tests, implementation roadmap and threat model are documented here:
-
-- [Stage 0 Baseline Audit](docs/STAGE-0-BASELINE-AUDIT.md)
-- [Platform Architecture V5](docs/PLATFORM-ARCHITECTURE-V5.md)
-- [Protocol and Integration Matrix](docs/PROTOCOL-INTEGRATION-MATRIX.md)
-- [Acceptance Test Plan](docs/ACCEPTANCE-TEST-PLAN.md)
-- [Implementation Roadmap](docs/IMPLEMENTATION-ROADMAP-V5.md)
-- [Security Threat Model](docs/SECURITY-THREAT-MODEL-V5.md)
-- [ADR-0001: Modular Monolith](docs/adr/0001-modular-monolith.md)
-
-These are target specifications and audit deliverables, not claims that their proposed services are already implemented. Capability statuses remain explicit in the documents.
+**NO-GO.** Keep PR #1 as draft. Android CI on the latest documented commit passed CodeQL but still fails the final exact-HTML asset gate. Python API tests pass locally at 93.78% coverage; Python CI on GitHub is pending verification after the source is committed. Release requires complete UI assets, real authorized integrations, tenant isolation, sandbox/security testing, device and responsive testing, observability, backup/restore validation and signed release artifacts.
