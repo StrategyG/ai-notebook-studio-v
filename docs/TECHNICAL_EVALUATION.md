@@ -32,14 +32,7 @@ These are engineering review estimates, not automated test results.
 
 ### P0 — WebView security configuration
 
-In `MainActivity.kt`:
-- `allowFileAccessFromFileURLs = true`
-- `allowUniversalAccessFromFileURLs = true`
-- `MIXED_CONTENT_ALWAYS_ALLOW`
-- JavaScript is enabled.
-- URL interception currently returns `false` for both local and external URLs, so the comment claiming external links open in a browser is not implemented.
-
-These settings expose the app to file-origin and mixed-content risks if untrusted content or navigation is introduced. Disable file-URL cross-origin access, block mixed content, use a strict navigation allowlist, and open external links with a safe external intent. Prefer AndroidX WebKit asset loading / `WebViewAssetLoader` over broad file access.
+The original `MainActivity.kt` enabled file-URL cross-origin access and `MIXED_CONTENT_ALWAYS_ALLOW`, and did not implement the external-browser behavior described in its comment. The hardening branch replaces `file://` loading with AndroidX `WebViewAssetLoader`, disables file/content access and mixed content, blocks non-HTTP(S) external schemes, opens HTTP(S) navigation in the system browser, and cancels SSL errors. No JavaScript bridge is exposed.
 
 ### P0 — Missing source assets in repository upload
 
@@ -47,7 +40,7 @@ The supplied ZIP contains:
 - `app/src/main/assets/index.html`
 - `app/src/main/assets/docs.html`
 
-Those two large HTML assets are **not included in this repository upload**. Therefore the GitHub copy is not yet a complete buildable copy of the supplied ZIP. The original ZIP also does not contain launcher icon resources even though the manifest references `@mipmap/ic_launcher` and `@mipmap/ic_launcher_round`; this must be corrected before a verified build.
+Those two large HTML assets are **not included in this repository upload**. The hardened branch still requires them before the V5 UI can render. The original ZIP also did not contain launcher icon resources; the hardening branch now adds a vector launcher icon and updates the manifest to use it.
 
 ### P1 — No verified AI/backend execution
 
@@ -79,13 +72,13 @@ Do not market this package as a connected AI notebook or production agent platfo
 6. **GitHub integration:** use OAuth/device authorization or a GitHub App with minimum scopes; never embed a personal access token in the client.
 7. **Quality gates:** add unit/instrumentation tests, CI, dependency scanning, static analysis, crash reporting, and release signing.
 
-## Upload scope and verification
+## Hardening branch update (2026-11-02)
 
-This repository now contains the README, Gradle configuration, Android manifest, Kotlin activities, and basic layout/value resources.
+Branch `production-hardening-v1` now adds WebViewAssetLoader-based loading, restrictive WebView settings, external URL handling, backup/cleartext restrictions, SDK 35 / Java 17 build settings, release minification, launcher vector resources, and GitHub Actions for tests/lint/debug assembly. See `docs/PRODUCTION_READINESS.md` and `SECURITY.md`.
 
-**Not uploaded:** the two large HTML assets from the ZIP and launcher icon files. The repository must not be considered a complete source mirror until those files are added. No APK was built or tested as part of this review.
+**Still missing:** `app/src/main/assets/index.html` and `app/src/main/assets/docs.html` from the supplied ZIP. The branch is therefore not a complete source mirror and the V5 interface will not load until those two files are uploaded. CI has not yet been observed passing, and no APK has been built or device-tested in this session. AI provider execution, OAuth, Supabase persistence, secure BYOK, user authentication, and cloud sync remain unimplemented/unverified.
 
 ## Final decision
 
 **NO-GO for production release.**  
-**GO for continued prototype development**, after the WebView security issues are fixed and the missing assets are restored.
+**GO for review and continued development on `production-hardening-v1`.** The Android security foundation has been improved, but missing UI assets, backend functionality, automated test coverage, and release signing remain blockers.
