@@ -1,11 +1,29 @@
-# AI Notebook Studio V5.0
+# AI Notebook Studio V5.1 — Android hardening branch
 
-Android WebView project containing the AI Notebook Studio V5 interface and documentation portal.
+This repository contains the Android WebView shell and bundled AI Notebook Studio interface. Branch `production-hardening-v1` adds a safer WebView boundary, Android release defaults, source assets, and CI quality gates.
 
-## Project status
+## Build locally
 
-This repository contains the Android wrapper and bundled web UI. Backend integrations (AI provider execution, GitHub OAuth, and Supabase persistence) are not implemented/verified in this package. See `docs/TECHNICAL_EVALUATION.md` for the evidence-based review.
+Requirements: Android Studio with Android SDK 35, JDK 17, and Gradle 8.9.
 
-## Build
+```bash
+gradle testDebugUnitTest lintDebug assembleDebug
+```
 
-Open this directory in Android Studio and run Gradle sync, then build the debug APK. Review `docs/TECHNICAL_EVALUATION.md` before treating this package as production-ready.
+Debug APK: `app/build/outputs/apk/debug/app-debug.apk`.
+
+## Security model
+
+- The bundled HTML is served with `WebViewAssetLoader` from `https://appassets.androidplatform.net/assets/`.
+- File access, content access, cleartext traffic, mixed content, popups, geolocation, and arbitrary URI schemes are disabled.
+- External HTTP(S) links leave the WebView and open in the system browser.
+- No JavaScript-to-native bridge is registered.
+- Android backup is disabled until a reviewed data export/restore design exists.
+
+## Important product status
+
+This is **not yet a production AI service**. The supplied V5 HTML is a frontend artifact. This branch does not claim that AI provider calls, GitHub OAuth, Supabase persistence, secure BYOK, user authentication, or cloud synchronization are operational. See [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md).
+
+## CI
+
+GitHub Actions runs unit tests, Android lint, and debug APK assembly for pushes to this branch and pull requests to `main`. A successful CI run is required before release; no build result is claimed until the workflow has actually completed.
