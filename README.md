@@ -1,29 +1,43 @@
-# AI Notebook Studio V5.1 — Android hardening branch
+# AI Notebook Studio V5.1 — hardened Android demo shell
 
-This repository contains the Android WebView shell for AI Notebook Studio. Branch `production-hardening-v1` adds a safer WebView boundary, Android release defaults, launcher resources, and CI quality gates. **The original `index.html` and `docs.html` from the supplied ZIP are still not present in this repository**, so the app will not display its full V5 UI until those assets are added.
+Branch: `production-hardening-v1` · Current status: **NO-GO for production release**
+
+This repository branch hardens the Android WebView shell and its build pipeline. It is not yet the complete V5 application: the original `app/src/main/assets/index.html` and `docs.html` from the supplied source ZIP are still absent from this branch. The app therefore shows a safe missing-asset message until those exact files are restored.
+
+## What is implemented
+
+- AndroidX `WebViewAssetLoader` serves the two local entry points from the reserved app-assets HTTPS origin.
+- File/content access, file-URL cross-origin access, mixed content, DOM storage, third-party cookies, popups, geolocation, and arbitrary URI schemes are disabled.
+- A restrictive Content Security Policy blocks all network connections, frames, forms, objects, and remote scripts/styles; only bundled UI scripts/styles and local/data/blob images are allowed.
+- Non-bundled WebView requests are blocked. User-clicked HTTP(S) links open in the system browser; SSL failures are canceled.
+- No JavaScript-to-native bridge is registered. The manifest has no INTERNET permission in this offline demo mode.
+- Android backup and cleartext HTTP are disabled. A native **DEMO / OFFLINE** banner warns that UI connection states and displayed data are simulated.
+- Main screen has a useful missing-asset error state and explicit Docs navigation.
+- JUnit navigation-policy tests; Android CI for unit tests, lint, debug APK, and unsigned release build validation.
+- CodeQL and Dependabot workflows are configured.
 
 ## Build locally
 
-Requirements: Android Studio with Android SDK 35, JDK 17, and Gradle 8.9.
+Requirements: JDK 17, Android SDK 35, and Gradle 8.9. This repository currently does not include the Gradle Wrapper.
 
 ```bash
-gradle testDebugUnitTest lintDebug assembleDebug
+gradle testDebugUnitTest lintDebug assembleDebug assembleRelease
 ```
 
-Debug APK: `app/build/outputs/apk/debug/app-debug.apk`.
+The release build from CI is **unsigned validation only**. Debug and unsigned release artifacts are useful for engineering validation but are not publishable production APK/AABs.
 
-## Security model
+## Product functionality — not connected yet
 
-- The bundled HTML is served with `WebViewAssetLoader` from `https://appassets.androidplatform.net/assets/`.
-- File access, content access, cleartext traffic, mixed content, popups, geolocation, and arbitrary URI schemes are disabled.
-- External HTTP(S) links leave the WebView and open in the system browser.
-- No JavaScript-to-native bridge is registered.
-- Android backup is disabled until a reviewed data export/restore design exists.
+The frontend is a static/demo UI. No operational AI provider adapter, model execution service, secure BYOK vault, user authentication, GitHub OAuth, notebook persistence, cloud sync, or notebook kernel/runtime has been verified or implemented. Labels such as connected, agents, costs, and task states in the original UI must not be treated as live service status.
 
-## Important product status
+Do not place API keys, GitHub tokens, Supabase service-role keys, OAuth secrets, or signing credentials in the APK or frontend bundle.
 
-This is **not yet a production AI service**. The supplied V5 HTML is a frontend artifact. This branch does not claim that AI provider calls, GitHub OAuth, Supabase persistence, secure BYOK, user authentication, or cloud synchronization are operational. See [`docs/PRODUCTION_READINESS.md`](docs/PRODUCTION_READINESS.md).
+## Release blockers
 
-## CI
+1. Restore and verify the exact `index.html` and `docs.html` source assets in the Git branch.
+2. Implement and security-review real backend/provider execution, authentication/authorization, secure credential handling, persistence, and notebook runtime.
+3. Add WebView/device instrumentation tests and test critical user flows on supported Android versions.
+4. Add a Gradle Wrapper, protected release signing, signed AAB generation, SBOM/dependency review, and staged release verification.
+5. Require passing Android CI and CodeQL on the exact release commit.
 
-GitHub Actions runs unit tests, Android lint, and debug APK assembly for pushes to this branch and pull requests to `main`. A successful CI run is required before release; no build result is claimed until the workflow has actually completed.
+See [Production Readiness](docs/PRODUCTION_READINESS.md), [Technical Evaluation](docs/TECHNICAL_EVALUATION.md), and [Security Policy](SECURITY.md).
