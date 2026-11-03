@@ -34,7 +34,7 @@ Studio talks to IM19 only indirectly through a UGAI-governed workflow. Studio's 
 - UGAI uses its own separately scoped, exact-resource token when it calls IM19. No IM19 bearer or provider token is forwarded to Studio.
 - Studio's internal execution endpoint accepts only a short-lived service credential for the exact Studio execution audience. It checks task, tenant, actor, notebook, runtime profile and idempotency bindings.
 
-## 3. Proposed interfaces (not implemented)
+## 3. Interface status (outbound clients implemented; server endpoints not implemented)
 
 The following are target interfaces only. Do not document them as available until routes, authorization dependencies, schemas, persistence, queue and tests exist.
 
@@ -92,7 +92,9 @@ Do not run user code inside the UGAI process, IM19 gateway or API worker process
 | JWT/JWKS verification foundation and protected identity endpoint | Present in V6 feature branch; real issuer integration unverified |
 | Tenant membership, resource ownership authorization and revocation | Not implemented in inspected V6 status |
 | React UI restoration | Blocked; repository status notes the React-named HTML file is an 88-byte placeholder |
-| UGAI task client/API | Not implemented or verified |
+| Studio outbound UGAI task client | Implemented in this branch with HTTPS-only transport, identity-bound token provider, request ID, idempotency key and bounded Pydantic payloads |
+| UGAI task API and durable task store | Not implemented or verified |
+| UGAI outbound Studio execution client | Implemented in UGAI integration branch; uses digest-only source reference, approved runtime profiles and bounded resource limits |
 | Notebook execution API, queue and isolated worker | Not implemented or verified |
 | MCP gateway inside Studio | Not required; must not be duplicated |
 | Direct Studio-to-IM19 MCP connection | Prohibited by this architecture; use UGAI |
@@ -103,8 +105,8 @@ Do not run user code inside the UGAI process, IM19 gateway or API worker process
 1. Complete tenant membership, role freshness, revocation and resource-level authorization in Studio.
 2. Restore maintainable Studio UI source and implement notebook/project persistence.
 3. Implement the isolated notebook execution service and its queue, status, cancellation and artifact APIs.
-4. Implement a UGAI client in the Studio API only after UGAI publishes a versioned, authenticated task API and OpenAPI contract.
-5. Implement UGAI's authenticated Studio execution adapter only after Studio publishes and secures the execution API contract.
+4. Implement the authenticated UGAI task API and durable task store; wire the Studio client only after the endpoint and OpenAPI contract are published.
+5. Implement Studio's authenticated execution API, queue and isolated worker; wire the UGAI execution client only after authorization and runtime controls pass.
 6. Connect UGAI to IM19 using the existing audited MCP adapter, a managed OAuth token provider and a durable audit sink.
 7. Add contract tests with fake services, then isolated staging tests with real OAuth audiences and separate tenant identities.
 8. Enable features gradually behind server-side flags. Keep external writes disabled until approval verification and recovery tests pass.
