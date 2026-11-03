@@ -180,3 +180,34 @@ async def test_submit_rejects_oversized_response() -> None:
             idempotency_key=uuid4(),
         )
     await http.aclose()
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_duplicate_json_keys() -> None:
+    task_id = uuid4()
+    duplicate_json = (
+        '{"task_id":"' + str(task_id) + '","request_id":"' + str(uuid4())
+        + '","state":"ACCEPTED","state":"COMPLETED"}'
+    )
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                202, content=duplicate_json, headers={"content-type": "application/json"}
+            )
+        )
+    )
+    client = UGAITaskClient(
+        base_url="https://ugai.example",
+        audience="ugai-api",
+        token_provider=TokenProvider(),
+        http_client=http,
+    )
+    with pytest.raises(UGAIUnavailable):
+        await client.submit_task(
+            TaskSubmission(intent="test", workspace_id=uuid4()),
+            subject="user-1",
+            tenant_id=uuid4(),
+            request_id=uuid4(),
+            idempotency_key=uuid4(),
+        )
+    await http.aclose()
