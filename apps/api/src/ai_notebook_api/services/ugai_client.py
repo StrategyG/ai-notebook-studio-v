@@ -6,12 +6,33 @@ This client never accepts actor_id or tenant_id in task payloads.
 
 from __future__ import annotations
 
-from typing import Protocol
+import json
+from typing import Literal, Protocol
 from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+
+MAX_RESPONSE_BYTES = 65_536
+MAX_BEARER_TOKEN_LENGTH = 8_192
+TaskStateCode = Literal[
+    "ACCEPTED",
+    "CREATED",
+    "PLANNED",
+    "ASSIGNED",
+    "RUNNING",
+    "REVIEW",
+    "VALIDATION",
+    "APPROVAL",
+    "COMPLETED",
+    "WAITING",
+    "BLOCKED",
+    "FAILED",
+    "CANCELLED",
+    "EXPIRED",
+]
 
 
 class UGAIClientError(RuntimeError):
@@ -56,7 +77,7 @@ class TaskReceipt(BaseModel):
 
     task_id: UUID
     request_id: UUID
-    state: str
+    state: TaskStateCode
     created_at: str | None = None
 
 
@@ -65,9 +86,37 @@ class TaskStatus(BaseModel):
 
     task_id: UUID
     request_id: UUID
-    state: str
+    state: TaskStateCode
     result_reference: str | None = None
     error_code: str | None = None
+
+
+async def _read_json_object(response: httpx.Response) -> dict[str, object]:
+    """Read a bounded JSON response and reject redirects, HTML and oversized bodies."""
+    response.raise_for_status()
+    media_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if media_type != "application/json" and not media_type.endswith("+json"):
+        raise ValueError("UGAI response content type is not JSON")
+
+    content_length = response.headers.get("content-length")
+    if content_length is not None:
+        try:
+            declared_size = int(content_length)
+        except ValueError as exc:
+            raise ValueError("UGAI response has an invalid content length") from exc
+        if declared_size < 0 or declared_size > MAX_RESPONSE_BYTES:
+            raise ValueError("UGAI response exceeds the permitted size")
+
+    body = bytearray()
+    async for chunk in response.aiter_bytes():
+        if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
+            raise ValueError("UGAI response exceeds the permitted size")
+        body.extend(chunk)
+
+    payload = json.loads(body)
+    if not isinstance(payload, dict):
+        raise ValueError("UGAI response must be a JSON object")
+    return payload
 
 
 class UGAITaskClient:
@@ -75,6 +124,7 @@ class UGAITaskClient:
 
     The HTTP client may be injected for tests. POST requests are not retried:
     a lost response can mean that the remote task was accepted.
+    Responses are size-limited and validated against the task state contract.
     """
 
     def __init__(
@@ -86,10 +136,15 @@ class UGAITaskClient:
         timeout_seconds: float = 10.0,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
-        parsed = urlparse(base_url)
+        try:
+            parsed = urlparse(base_url)
+            hostname = parsed.hostname
+            _ = parsed.port
+        except ValueError as exc:
+            raise ValueError("UGAI base URL must be a valid HTTPS origin") from exc
         if (
             parsed.scheme != "https"
-            or not parsed.netloc
+            or not hostname
             or parsed.username
             or parsed.password
             or parsed.path not in ("", "/")
@@ -97,7 +152,7 @@ class UGAITaskClient:
             or parsed.fragment
         ):
             raise ValueError("UGAI base URL must be an HTTPS origin")
-        if not audience or len(audience) > 255:
+        if not audience or len(audience) > 255 or any(ch.isspace() for ch in audience):
             raise ValueError("A bounded UGAI token audience is required")
         if not 0 < timeout_seconds <= 60:
             raise ValueError("timeout_seconds must be between 0 and 60")
@@ -131,7 +186,12 @@ class UGAITaskClient:
             )
         except Exception as exc:
             raise UGAIAuthenticationError("Could not obtain UGAI service token") from exc
-        if not token or any(ch.isspace() for ch in token):
+        if (
+            not isinstance(token, str)
+            or not token
+            or len(token) > MAX_BEARER_TOKEN_LENGTH
+            or any(ord(ch) < 33 or ord(ch) == 127 for ch in token)
+        ):
             raise UGAIAuthenticationError("Token provider returned an invalid token")
         headers = {
             "Authorization": f"Bearer {token}",
@@ -141,6 +201,23 @@ class UGAITaskClient:
         if idempotency_key is not None:
             headers["Idempotency-Key"] = str(idempotency_key)
         return headers
+
+    async def _request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        headers: dict[str, str],
+        payload: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        async with self._http.stream(
+            method,
+            f"{self._base_url}{path}",
+            headers=headers,
+            json=payload,
+            timeout=self._timeout,
+        ) as response:
+            return await _read_json_object(response)
 
     async def submit_task(
         self,
@@ -158,17 +235,15 @@ class UGAITaskClient:
             idempotency_key=idempotency_key,
         )
         try:
-            response = await self._http.post(
-                f"{self._base_url}/api/v1/tasks",
-                headers=headers,
-                json=submission.model_dump(mode="json"),
-                timeout=self._timeout,
+            body = await self._request_json(
+                "POST", "/api/v1/tasks", headers=headers,
+                payload=submission.model_dump(mode="json"),
             )
-            response.raise_for_status()
-            return TaskReceipt.model_validate(response.json())
+            return TaskReceipt.model_validate(body)
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable(
-                "UGAI task submission failed or returned an invalid receipt; reconcile by idempotency key"
+                "UGAI task submission failed or returned an invalid receipt; "
+                "reconcile by idempotency key"
             ) from exc
 
     async def get_task(
@@ -178,13 +253,10 @@ class UGAITaskClient:
             subject=subject, tenant_id=tenant_id, request_id=request_id
         )
         try:
-            response = await self._http.get(
-                f"{self._base_url}/api/v1/tasks/{task_id}",
-                headers=headers,
-                timeout=self._timeout,
+            body = await self._request_json(
+                "GET", f"/api/v1/tasks/{task_id}", headers=headers
             )
-            response.raise_for_status()
-            return TaskStatus.model_validate(response.json())
+            return TaskStatus.model_validate(body)
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable("UGAI task status request failed") from exc
 
@@ -195,12 +267,9 @@ class UGAITaskClient:
             subject=subject, tenant_id=tenant_id, request_id=request_id
         )
         try:
-            response = await self._http.post(
-                f"{self._base_url}/api/v1/tasks/{task_id}/cancel",
-                headers=headers,
-                timeout=self._timeout,
+            body = await self._request_json(
+                "POST", f"/api/v1/tasks/{task_id}/cancel", headers=headers
             )
-            response.raise_for_status()
-            return TaskStatus.model_validate(response.json())
+            return TaskStatus.model_validate(body)
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable("UGAI task cancellation request failed") from exc
