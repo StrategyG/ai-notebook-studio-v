@@ -33,7 +33,7 @@ JWT verification proves that the configured issuer signed the claims. It does **
 - No tenant membership lookup, session revocation, authorization database or RLS enforcement.
 - No durable approval store, audit ledger or transactional outbox.
 - No AI provider gateway, BYOK vault, notebook runtime, MCP/A2A transport or integrations.
-- Readiness still checks configuration presence, not live dependency health.
+- `/health/ready` now checks database connectivity, presence of the required base tables (`tenant_memberships`, `audit_events`, `outbox_events`, `provider_credentials`) and live JWKS reachability. It still does not prove the current migration revision, real token acceptance, tenant isolation, or full staging acceptance.
 - The Android UI payload is not restored by this API change.
 
 Do not deploy this API as production-ready solely because JWT verification is implemented.
