@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze Kotlin / Android
+    name: Analyze Python API
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -23,26 +23,14 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-      - name: Install Android SDK packages
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      # The current Android source bundle contains no Java/Kotlin source files.
+      # Do not report a false-positive CodeQL configuration failure; scan the
+      # actual Python API now. Re-enable java-kotlin when the full Android source
+      # tree is restored and has compilable source files.
       - uses: github/codeql-action/init@v4
         with:
-          languages: java-kotlin
-          build-mode: manual
-      - name: Build Kotlin sources for CodeQL tracing
-        run: gradle --no-daemon :app:compileDebugKotlin
+          languages: python
+          build-mode: none
       - uses: github/codeql-action/analyze@v4
         with:
-          category: "/language:java-kotlin"
+          category: "/language:python"
