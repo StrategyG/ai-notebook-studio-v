@@ -95,8 +95,11 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
                 request_id="rls-request",
                 payload={"test": True},
             )
+            # Read the ORM value before commit expires attributes and clears the
+            # transaction-local tenant context used by PostgreSQL RLS.
+            persisted_sequence = event.sequence
             session.commit()
-            assert event.sequence == 1
+            assert persisted_sequence == 1
             assert verify_audit_chain(session, tenant_id=tenant_c)
     finally:
         engine.dispose()
