@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from ai_notebook_api.services.ugai_client import (
+    MAX_RESPONSE_BYTES,
     TaskReceipt,
     TaskSubmission,
     UGAIAuthenticationError,
@@ -108,6 +109,69 @@ async def test_submit_does_not_hide_uncertain_remote_failure() -> None:
         http_client=http,
     )
     with pytest.raises(UGAIUnavailable, match="reconcile by idempotency key"):
+        await client.submit_task(
+            TaskSubmission(intent="test", workspace_id=uuid4()),
+            subject="user-1",
+            tenant_id=uuid4(),
+            request_id=uuid4(),
+            idempotency_key=uuid4(),
+        )
+    await http.aclose()
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_unknown_state_and_non_json_responses() -> None:
+    task_id = uuid4()
+    responses = [
+        httpx.Response(
+            202,
+            json={
+                "task_id": str(task_id),
+                "request_id": str(uuid4()),
+                "state": "MAGICALLY_DONE",
+            },
+        ),
+        httpx.Response(202, text="accepted", headers={"content-type": "text/plain"}),
+    ]
+    for response in responses:
+        http = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda request, response=response: response)
+        )
+        client = UGAITaskClient(
+            base_url="https://ugai.example",
+            audience="ugai-api",
+            token_provider=TokenProvider(),
+            http_client=http,
+        )
+        with pytest.raises(UGAIUnavailable):
+            await client.submit_task(
+                TaskSubmission(intent="test", workspace_id=uuid4()),
+                subject="user-1",
+                tenant_id=uuid4(),
+                request_id=uuid4(),
+                idempotency_key=uuid4(),
+            )
+        await http.aclose()
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_oversized_response() -> None:
+    payload = {
+        "task_id": str(uuid4()),
+        "request_id": str(uuid4()),
+        "state": "ACCEPTED",
+        "padding": "x" * MAX_RESPONSE_BYTES,
+    }
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(202, json=payload))
+    )
+    client = UGAITaskClient(
+        base_url="https://ugai.example",
+        audience="ugai-api",
+        token_provider=TokenProvider(),
+        http_client=http,
+    )
+    with pytest.raises(UGAIUnavailable):
         await client.submit_task(
             TaskSubmission(intent="test", workspace_id=uuid4()),
             subject="user-1",
