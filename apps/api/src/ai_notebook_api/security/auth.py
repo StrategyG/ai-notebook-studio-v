@@ -92,6 +92,17 @@ def verify_access_token(token: str, settings: Settings) -> Principal:
         raise TokenVerificationError("access token verification failed") from exc
 
 
+def identity_provider_ready(settings: Settings) -> bool:
+    """Check that the configured JWKS endpoint is reachable and exposes signing keys."""
+    if not settings.auth_configured:
+        return False
+    try:
+        return bool(_jwks_client(settings.auth_jwks_url or "").get_signing_keys())
+    except Exception:
+        # Readiness must fail closed without exposing identity-provider details.
+        return False
+
+
 def get_current_principal(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     settings: Annotated[Settings, Depends(get_settings)],
