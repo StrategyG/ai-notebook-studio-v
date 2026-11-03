@@ -6,7 +6,8 @@ This client never accepts actor_id or tenant_id in task payloads.
 
 from __future__ import annotations
 
-from typing import Literal, Protocol
+from enum import StrEnum
+from typing import Protocol
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -15,6 +16,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 MAX_RESPONSE_BYTES = 65_536
 MAX_BEARER_TOKEN_LENGTH = 8_192
+
+
 class TaskStateCode(StrEnum):
     ACCEPTED = "ACCEPTED"
     CREATED = "CREATED"
