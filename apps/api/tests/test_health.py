@@ -23,6 +23,10 @@ def test_readiness_does_not_claim_ready_without_auth_and_database() -> None:
 
 
 def test_readiness_rejects_non_https_identity_endpoints(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ai_notebook_api.api.health._database_health",
+        lambda _settings: (True, True),
+    )
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example:5432/app")
     monkeypatch.setenv("AUTH_JWKS_URL", "http://identity.example/.well-known/jwks.json")
     monkeypatch.setenv("AUTH_ISSUER", "https://identity.example/")
