@@ -62,7 +62,7 @@ class Settings:
         parsed = urlparse(self.database_url)
         return (
             parsed.scheme
-            in {"postgres", "postgresql", "postgresql+psycopg", "postgresql+asyncpg"}
+            in {"postgres", "postgresql", "postgresql+psycopg"}
             and bool(parsed.netloc)
         )
 
