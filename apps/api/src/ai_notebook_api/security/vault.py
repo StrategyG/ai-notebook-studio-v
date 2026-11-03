@@ -3,8 +3,8 @@ from __future__ import annotations
 import base64
 import json
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 from uuid import UUID
 
 from cryptography.exceptions import InvalidTag
@@ -64,7 +64,7 @@ class SecretVault:
     def _aad(tenant_id: UUID, credential_id: UUID, provider_id: str) -> bytes:
         return (
             f"ai-notebook-studio:v1:{tenant_id}:{credential_id}:{provider_id}"
-        ).encode("utf-8")
+        ).encode()
 
     def encrypt(
         self, plaintext: str, *, tenant_id: UUID, credential_id: UUID, provider_id: str
