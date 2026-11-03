@@ -6,7 +6,6 @@ This client never accepts actor_id or tenant_id in task payloads.
 
 from __future__ import annotations
 
-import json
 from typing import Literal, Protocol
 from urllib.parse import urlparse
 from uuid import UUID
@@ -113,7 +112,7 @@ async def _read_json_object(response: httpx.Response) -> dict[str, object]:
             raise ValueError("UGAI response exceeds the permitted size")
         body.extend(chunk)
 
-    payload = json.loads(body)
+    payload = httpx.Response(200, content=bytes(body)).json()
     if not isinstance(payload, dict):
         raise ValueError("UGAI response must be a JSON object")
     return payload
