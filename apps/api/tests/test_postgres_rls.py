@@ -95,8 +95,11 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
                 request_id="rls-request",
                 payload={"test": True},
             )
+            sequence = event.sequence
             session.commit()
-            assert event.sequence == 1
+            # The tenant GUC is transaction-local; do not dereference an
+            # expired ORM object after commit outside the tenant context.
+            assert sequence == 1
             assert verify_audit_chain(session, tenant_id=tenant_c)
     finally:
         engine.dispose()
