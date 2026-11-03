@@ -16,22 +16,21 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 MAX_RESPONSE_BYTES = 65_536
 MAX_BEARER_TOKEN_LENGTH = 8_192
-TaskStateCode = Literal[
-    "ACCEPTED",
-    "CREATED",
-    "PLANNED",
-    "ASSIGNED",
-    "RUNNING",
-    "REVIEW",
-    "VALIDATION",
-    "APPROVAL",
-    "COMPLETED",
-    "WAITING",
-    "BLOCKED",
-    "FAILED",
-    "CANCELLED",
-    "EXPIRED",
-]
+class TaskStateCode(StrEnum):
+    ACCEPTED = "ACCEPTED"
+    CREATED = "CREATED"
+    PLANNED = "PLANNED"
+    ASSIGNED = "ASSIGNED"
+    RUNNING = "RUNNING"
+    REVIEW = "REVIEW"
+    VALIDATION = "VALIDATION"
+    APPROVAL = "APPROVAL"
+    COMPLETED = "COMPLETED"
+    WAITING = "WAITING"
+    BLOCKED = "BLOCKED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    EXPIRED = "EXPIRED"
 
 
 class UGAIClientError(RuntimeError):
