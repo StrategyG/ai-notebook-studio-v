@@ -13,7 +13,6 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-
 MAX_RESPONSE_BYTES = 65_536
 MAX_BEARER_TOKEN_LENGTH = 8_192
 class TaskStateCode(StrEnum):
