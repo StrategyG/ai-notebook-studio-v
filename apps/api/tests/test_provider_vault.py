@@ -1,6 +1,6 @@
-from collections.abc import Generator
 import base64
 import json
+from collections.abc import Generator
 from uuid import UUID
 
 import pytest
