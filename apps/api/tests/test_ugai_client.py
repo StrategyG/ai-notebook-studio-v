@@ -1,4 +1,4 @@
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import httpx
 import pytest
@@ -25,13 +25,17 @@ class TokenProvider:
 @pytest.mark.asyncio
 async def test_submit_task_binds_identity_to_token_and_idempotency() -> None:
     captured = {}
+
     async def handler(request: httpx.Request) -> httpx.Response:
         captured["request"] = request
-        return httpx.Response(202, json={
-            "task_id": str(uuid4()),
-            "request_id": request.headers["X-Request-ID"],
-            "state": "ACCEPTED",
-        })
+        return httpx.Response(
+            202,
+            json={
+                "task_id": str(uuid4()),
+                "request_id": request.headers["X-Request-ID"],
+                "state": "ACCEPTED",
+            },
+        )
 
     provider = TokenProvider()
     http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -75,25 +79,27 @@ def test_client_rejects_non_https_endpoint() -> None:
 @pytest.mark.asyncio
 async def test_client_fails_closed_when_token_provider_returns_empty_token() -> None:
     provider = TokenProvider(token="")
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda request: httpx.Response(500))
+    )
     client = UGAITaskClient(
         base_url="https://ugai.example",
         audience="ugai-api",
         token_provider=provider,
-        http_client=httpx.AsyncClient(transport=httpx.MockTransport(
-            lambda request: httpx.Response(500)
-        )),
+        http_client=http,
     )
     with pytest.raises(UGAIAuthenticationError):
         await client.get_task(
             uuid4(), subject="user-1", tenant_id=uuid4(), request_id=uuid4()
         )
-    await client._http.aclose()
+    await http.aclose()
 
 
 @pytest.mark.asyncio
 async def test_submit_does_not_hide_uncertain_remote_failure() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(503)
+
     http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
     client = UGAITaskClient(
         base_url="https://ugai.example",
