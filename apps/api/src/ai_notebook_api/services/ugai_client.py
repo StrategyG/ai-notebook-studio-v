@@ -257,7 +257,10 @@ class UGAITaskClient:
                 "POST", "/api/v1/tasks", headers=headers,
                 payload=submission.model_dump(mode="json"),
             )
-            return TaskReceipt.model_validate(body)
+            receipt = TaskReceipt.model_validate(body)
+            if receipt.request_id != request_id:
+                raise ValueError("UGAI returned a receipt for a different request")
+            return receipt
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable(
                 "UGAI task submission failed or returned an invalid receipt; "
@@ -274,7 +277,10 @@ class UGAITaskClient:
             body = await self._request_json(
                 "GET", f"/api/v1/tasks/{task_id}", headers=headers
             )
-            return TaskStatus.model_validate(body)
+            status = TaskStatus.model_validate(body)
+            if status.task_id != task_id:
+                raise ValueError("UGAI returned a status for a different task")
+            return status
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable("UGAI task status request failed") from exc
 
@@ -288,6 +294,9 @@ class UGAITaskClient:
             body = await self._request_json(
                 "POST", f"/api/v1/tasks/{task_id}/cancel", headers=headers
             )
-            return TaskStatus.model_validate(body)
+            status = TaskStatus.model_validate(body)
+            if status.task_id != task_id:
+                raise ValueError("UGAI returned a cancellation for a different task")
+            return status
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable("UGAI task cancellation request failed") from exc
