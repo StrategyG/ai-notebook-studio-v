@@ -6,8 +6,7 @@ This client never accepts actor_id or tenant_id in task payloads.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any, Protocol
+from typing import Protocol
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -88,7 +87,15 @@ class UGAITaskClient:
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         parsed = urlparse(base_url)
-        if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
+        if (
+            parsed.scheme != "https"
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.path not in ("", "/")
+            or parsed.query
+            or parsed.fragment
+        ):
             raise ValueError("UGAI base URL must be an HTTPS origin")
         if not audience or len(audience) > 255:
             raise ValueError("A bounded UGAI token audience is required")
@@ -106,7 +113,12 @@ class UGAITaskClient:
             await self._http.aclose()
 
     async def _headers(
-        self, *, subject: str, tenant_id: UUID, request_id: UUID, idempotency_key: UUID | None = None
+        self,
+        *,
+        subject: str,
+        tenant_id: UUID,
+        request_id: UUID,
+        idempotency_key: UUID | None = None,
     ) -> dict[str, str]:
         if not subject or len(subject) > 255:
             raise UGAIAuthenticationError("A verified subject is required")
