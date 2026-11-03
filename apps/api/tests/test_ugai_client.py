@@ -211,3 +211,76 @@ async def test_submit_rejects_duplicate_json_keys() -> None:
             idempotency_key=uuid4(),
         )
     await http.aclose()
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_receipt_with_wrong_request_id() -> None:
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                202,
+                json={
+                    "task_id": str(uuid4()),
+                    "request_id": str(uuid4()),
+                    "state": "ACCEPTED",
+                },
+            )
+        )
+    )
+    client = UGAITaskClient(
+        base_url="https://ugai.example",
+        audience="ugai-api",
+        token_provider=TokenProvider(),
+        http_client=http,
+    )
+    with pytest.raises(UGAIUnavailable):
+        await client.submit_task(
+            TaskSubmission(intent="test", workspace_id=uuid4()),
+            subject="user-1",
+            tenant_id=uuid4(),
+            request_id=uuid4(),
+            idempotency_key=uuid4(),
+        )
+    await http.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["get", "cancel"])
+async def test_task_status_rejects_response_for_different_task(operation: str) -> None:
+    requested_task_id = uuid4()
+    wrong_task_id = uuid4()
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "task_id": str(wrong_task_id),
+                    "request_id": str(uuid4()),
+                    "state": "RUNNING",
+                },
+            )
+        )
+    )
+    client = UGAITaskClient(
+        base_url="https://ugai.example",
+        audience="ugai-api",
+        token_provider=TokenProvider(),
+        http_client=http,
+    )
+
+    with pytest.raises(UGAIUnavailable):
+        if operation == "get":
+            await client.get_task(
+                requested_task_id,
+                subject="user-1",
+                tenant_id=uuid4(),
+                request_id=uuid4(),
+            )
+        else:
+            await client.cancel_task(
+                requested_task_id,
+                subject="user-1",
+                tenant_id=uuid4(),
+                request_id=uuid4(),
+            )
+    await http.aclose()
