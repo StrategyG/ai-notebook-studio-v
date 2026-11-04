@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, BigInteger, DateTime, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, JSON, BigInteger, DateTime, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ai_notebook_api.db.base import Base
@@ -14,6 +14,10 @@ class TenantMembership(Base):
     __tablename__ = "tenant_memberships"
     __table_args__ = (
         UniqueConstraint("tenant_id", "subject", name="uq_tenant_memberships_tenant_subject"),
+        CheckConstraint(
+            "role IN ('owner', 'admin', 'editor', 'member', 'viewer')",
+            name="ck_tenant_memberships_role",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
