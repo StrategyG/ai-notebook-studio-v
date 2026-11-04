@@ -56,10 +56,26 @@ The execution request must reference an immutable notebook/cell revision or sour
 
 Carry request_id, task_id, execution_id, idempotency_key, tenant and actor context, notebook/revision identifiers and distributed trace context. IDs used for authorization must be resolved from verified server-side records, not trusted because a client supplied them.
 
-Execution states:
-ACCEPTED -> QUEUED -> RUNNING -> SUCCEEDED | FAILED | CANCELLED.
+The UGAI workflow state machine is the source of truth for task state. The Studio client must parse these exact, case-sensitive values; it must not invent a parallel backend state vocabulary:
 
-Cancellation is asynchronous. A timeout or lost response does not prove execution failed; reconcile by execution ID before retrying.
+- `received`
+- `observing`
+- `planning`
+- `executing`
+- `verifying`
+- `awaiting_approval`
+- `awaiting_clarification`
+- `blocked`
+- `failed`
+- `succeeded`
+- `cancelled`
+
+The Notebook client may map canonical workflow states to display-only labels (for example, `received` → `ACCEPTED`, `executing` → `RUNNING`, and `succeeded` → `COMPLETED`). Display labels must never be sent back as persisted workflow states. Task responses must echo the exact request ID supplied by the caller; status and cancellation responses must also echo the requested task ID. Unknown states or mismatched correlation IDs fail closed.
+
+Studio execution states remain a separate, Studio-owned lifecycle:
+`ACCEPTED -> QUEUED -> RUNNING -> SUCCEEDED | FAILED | CANCELLED`.
+
+Cancellation is asynchronous. A timeout or lost response does not prove execution failed; reconcile by task or execution ID before retrying.
 
 ## 4. Notebook execution isolation
 
