@@ -47,12 +47,15 @@ TENANT_ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
 
 
 def resolve_active_membership(
-    session: Session, *, subject: str, tenant_id: UUID
+    session: Session, *, issuer: str, subject: str, tenant_id: UUID
 ) -> TenantMembership:
+    if not issuer or len(issuer) > 2048 or not subject or len(subject) > 255:
+        raise TenantAuthorizationError("issuer-scoped principal identity is invalid")
     apply_tenant_database_context(session, str(tenant_id))
     membership = session.scalar(
         select(TenantMembership).where(
             TenantMembership.tenant_id == tenant_id,
+            TenantMembership.issuer == issuer,
             TenantMembership.subject == subject,
             TenantMembership.status == "active",
         )
@@ -68,7 +71,7 @@ def get_tenant_context(
 ) -> TenantMembership:
     try:
         return resolve_active_membership(
-            session, subject=principal.subject, tenant_id=principal.tenant_id
+            session, issuer=principal.issuer, subject=principal.subject, tenant_id=principal.tenant_id
         )
     except TenantAuthorizationError as exc:
         raise HTTPException(
