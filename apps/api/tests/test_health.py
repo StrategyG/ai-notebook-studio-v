@@ -115,6 +115,12 @@ def test_database_tls_verification_requires_verify_full():
     assert Settings(
         database_url="postgresql://user:pass@db.example/app"
     ).database_tls_verified is False
+    assert Settings(
+        database_url=(
+            "postgresql://user:pass@db.example/app"
+            "?sslmode=require&sslmode=verify-full"
+        )
+    ).database_tls_verified is False
 
 
 def test_production_readiness_fails_without_verified_database_tls(monkeypatch):
