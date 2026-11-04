@@ -125,7 +125,7 @@ class TaskStatus(BaseModel):
 
     task_id: UUID
     request_id: UUID
-    state: TaskStateCode
+    state: WorkflowTaskState
     result_reference: str | None = Field(default=None, max_length=512)
     error_code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_:-]{0,127}$")
 
