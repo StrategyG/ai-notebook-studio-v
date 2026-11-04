@@ -83,7 +83,7 @@ class Settings:
         except ValueError:
             return False
         modes = query.get("sslmode", [])
-        return bool(modes and modes[-1].strip().lower() == "verify-full")
+        return len(modes) == 1 and modes[0].strip().lower() == "verify-full"
 
 
 @lru_cache(maxsize=1)
