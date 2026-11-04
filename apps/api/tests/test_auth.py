@@ -126,6 +126,30 @@ def test_verifier_requires_tenant_claim(monkeypatch) -> None:
         verify_access_token("signed-token", configured_settings())
 
 
+def test_verifier_requires_verified_issuer_claim(monkeypatch) -> None:
+    class FakeSigningKey:
+        key = "public-key"
+
+    class FakeJwksClient:
+        def get_signing_key_from_jwt(self, _token):
+            return FakeSigningKey()
+
+    monkeypatch.setattr(auth, "_jwks_client", lambda _url: FakeJwksClient())
+    monkeypatch.setattr(jwt, "get_unverified_header", lambda _token: {"alg": "RS256"})
+    monkeypatch.setattr(
+        jwt,
+        "decode",
+        lambda *_args, **_kwargs: {
+            "sub": "user-123",
+            "tenant_id": TENANT_ID,
+            "aud": "ai-notebook-api",
+            "exp": 2_000_000_000,
+        },
+    )
+    with pytest.raises(TokenVerificationError, match="issuer"):
+        verify_access_token("signed-token", configured_settings())
+
+
 def test_scope_dependency_rejects_missing_scope() -> None:
     dependency = require_scopes("notebooks:write")
     principal = Principal(
