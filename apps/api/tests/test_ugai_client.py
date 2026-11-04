@@ -400,3 +400,76 @@ async def test_task_client_requests_operation_specific_scope(
     assert provider.calls[0]["scopes"] == (expected_scope,)
     await http.aclose()
 
+@pytest.mark.asyncio
+async def test_task_client_retrieves_result_with_read_scope_and_correlation() -> None:
+    task_id = uuid4()
+    provider = TokenProvider()
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "task_id": str(task_id),
+                    "request_id": request.headers["X-Request-ID"],
+                    "result": {
+                        "task_id": str(task_id),
+                        "candidate_answer": "A bounded reasoning result",
+                        "human_review_required": True,
+                    },
+                },
+            )
+        )
+    )
+    client = UGAITaskClient(
+        base_url="https://ugai.example",
+        audience="ugai-api",
+        token_provider=provider,
+        http_client=http,
+    )
+    request_id = uuid4()
+    result = await client.get_task_result(
+        task_id,
+        subject="user-1",
+        tenant_id=uuid4(),
+        workspace_id=uuid4(),
+        request_id=request_id,
+    )
+    assert result.task_id == task_id
+    assert result.request_id == request_id
+    assert result.result["human_review_required"] is True
+    assert provider.calls[0]["scopes"] == ("ugai:tasks:read",)
+    await http.aclose()
+
+
+@pytest.mark.asyncio
+async def test_task_client_rejects_result_for_different_task() -> None:
+    task_id = uuid4()
+    other_id = uuid4()
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "task_id": str(task_id),
+                    "request_id": request.headers["X-Request-ID"],
+                    "result": {"task_id": str(other_id)},
+                },
+            )
+        )
+    )
+    client = UGAITaskClient(
+        base_url="https://ugai.example",
+        audience="ugai-api",
+        token_provider=TokenProvider(),
+        http_client=http,
+    )
+    with pytest.raises(UGAIUnavailable):
+        await client.get_task_result(
+            task_id,
+            subject="user-1",
+            tenant_id=uuid4(),
+            workspace_id=uuid4(),
+            request_id=uuid4(),
+        )
+    await http.aclose()
+
