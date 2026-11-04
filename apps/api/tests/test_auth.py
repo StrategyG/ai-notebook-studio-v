@@ -72,6 +72,7 @@ def test_verifier_uses_allowlisted_algorithm_and_required_claim_validation(monke
         assert token == "signed-token"
         assert key == "verified-public-key"
         return {
+            "iss": "https://identity.example/",
             "sub": "user-123",
             "tenant_id": TENANT_ID,
             "roles": ["member"],
@@ -83,6 +84,7 @@ def test_verifier_uses_allowlisted_algorithm_and_required_claim_validation(monke
     auth._jwks_client.cache_clear()
 
     assert principal == Principal(
+        issuer="https://identity.example/",
         subject="user-123",
         tenant_id=UUID(TENANT_ID),
         roles=frozenset({"member"}),
@@ -127,6 +129,7 @@ def test_verifier_requires_tenant_claim(monkeypatch) -> None:
 def test_scope_dependency_rejects_missing_scope() -> None:
     dependency = require_scopes("notebooks:write")
     principal = Principal(
+        issuer="https://identity.example/",
         subject="user-123",
         tenant_id=UUID(TENANT_ID),
         roles=frozenset({"member"}),
