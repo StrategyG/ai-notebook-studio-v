@@ -5,6 +5,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -58,6 +59,21 @@ def test_active_membership_is_resolved_from_database_not_token_roles(session: Se
 
     assert membership.role == "admin"
     assert membership.status == "active"
+
+
+def test_api_membership_rejects_supabase_only_role(session: Session) -> None:
+    session.add(
+        TenantMembership(
+            tenant_id=TENANT_A,
+            subject="user-1",
+            role="billing_viewer",
+            status="active",
+        )
+    )
+
+    with pytest.raises(IntegrityError):
+        session.commit()
+    session.rollback()
 
 
 def test_membership_from_another_tenant_is_not_authorized(session: Session) -> None:
