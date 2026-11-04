@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Index,
     CheckConstraint,
     DateTime,
     LargeBinary,
@@ -22,7 +23,13 @@ from ai_notebook_api.db.base import Base
 class TenantMembership(Base):
     __tablename__ = "tenant_memberships"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "subject", name="uq_tenant_memberships_tenant_subject"),
+        Index(
+            "uq_tenant_memberships_tenant_issuer_subject",
+            "tenant_id",
+            "issuer",
+            "subject",
+            unique=True,
+        ),
         CheckConstraint(
             "role IN ('owner', 'admin', 'editor', 'member', 'viewer')",
             name="ck_tenant_memberships_role",
@@ -31,6 +38,9 @@ class TenantMembership(Base):
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     tenant_id: Mapped[UUID] = mapped_column(index=True, nullable=False)
+    # Nullable only for legacy rows awaiting an explicitly verified issuer backfill.
+    # Runtime authorization always requires an exact issuer + subject match.
+    issuer: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
