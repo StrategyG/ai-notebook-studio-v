@@ -25,7 +25,7 @@ class Settings:
             dict.fromkeys(item.strip().upper() for item in raw_algorithms.split(",") if item.strip())
         )
         return cls(
-            app_env=os.getenv("APP_ENV", "development").lower(),
+            app_env=os.getenv("APP_ENV", "development").strip().lower(),
             database_url=os.getenv("DATABASE_URL") or None,
             auth_jwks_url=os.getenv("AUTH_JWKS_URL") or None,
             auth_issuer=os.getenv("AUTH_ISSUER") or None,
