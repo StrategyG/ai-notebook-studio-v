@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 SUPPORTED_JWT_ALGORITHMS = frozenset({"RS256", "ES256"})
 
@@ -59,12 +59,31 @@ class Settings:
     def persistence_configured(self) -> bool:
         if not self.database_url:
             return False
-        parsed = urlparse(self.database_url)
+        try:
+            parsed = urlparse(self.database_url)
+        except ValueError:
+            return False
         return (
             parsed.scheme
             in {"postgres", "postgresql", "postgresql+psycopg"}
             and bool(parsed.netloc)
         )
+
+    @property
+    def database_tls_verified(self) -> bool:
+        """Return true only when PostgreSQL verifies its CA and server hostname.
+
+        sslmode=require encrypts transport but does not authenticate the server
+        hostname. Production readiness therefore requires libpq's verify-full.
+        """
+        if not self.persistence_configured or not self.database_url:
+            return False
+        try:
+            query = parse_qs(urlparse(self.database_url).query, keep_blank_values=True)
+        except ValueError:
+            return False
+        modes = query.get("sslmode", [])
+        return bool(modes and modes[-1].strip().lower() == "verify-full")
 
 
 @lru_cache(maxsize=1)
