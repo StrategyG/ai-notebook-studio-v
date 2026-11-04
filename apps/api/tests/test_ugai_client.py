@@ -391,4 +391,4 @@ async def test_task_client_requests_operation_specific_scope(
         )
     assert provider.calls[0]["scopes"] == (expected_scope,)
     await http.aclose()
-\n
+
