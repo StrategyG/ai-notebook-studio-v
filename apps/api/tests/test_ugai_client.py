@@ -10,6 +10,9 @@ from ai_notebook_api.services.ugai_client import (
     UGAIAuthenticationError,
     UGAITaskClient,
     UGAIUnavailable,
+    TaskDisplayState,
+    WorkflowTaskState,
+    display_task_state,
 )
 
 
@@ -34,7 +37,7 @@ async def test_submit_task_binds_identity_to_token_and_idempotency() -> None:
             json={
                 "task_id": str(uuid4()),
                 "request_id": request.headers["X-Request-ID"],
-                "state": "ACCEPTED",
+                "state": "received",
             },
         )
 
@@ -159,7 +162,7 @@ async def test_submit_rejects_oversized_response() -> None:
     payload = {
         "task_id": str(uuid4()),
         "request_id": str(uuid4()),
-        "state": "ACCEPTED",
+        "state": "received",
         "padding": "x" * MAX_RESPONSE_BYTES,
     }
     http = httpx.AsyncClient(
@@ -222,7 +225,7 @@ async def test_submit_rejects_receipt_with_wrong_request_id() -> None:
                 json={
                     "task_id": str(uuid4()),
                     "request_id": str(uuid4()),
-                    "state": "ACCEPTED",
+                    "state": "received",
                 },
             )
         )
@@ -256,7 +259,7 @@ async def test_task_status_rejects_response_for_different_task(operation: str) -
                 json={
                     "task_id": str(wrong_task_id),
                     "request_id": str(uuid4()),
-                    "state": "RUNNING",
+                    "state": "executing",
                 },
             )
         )
@@ -284,3 +287,67 @@ async def test_task_status_rejects_response_for_different_task(operation: str) -
                 request_id=uuid4(),
             )
     await http.aclose()
+
+@pytest.mark.parametrize(
+    ("workflow_state", "display_state"),
+    [
+        (WorkflowTaskState.RECEIVED, TaskDisplayState.ACCEPTED),
+        (WorkflowTaskState.OBSERVING, TaskDisplayState.PLANNED),
+        (WorkflowTaskState.PLANNING, TaskDisplayState.PLANNED),
+        (WorkflowTaskState.EXECUTING, TaskDisplayState.RUNNING),
+        (WorkflowTaskState.VERIFYING, TaskDisplayState.VALIDATION),
+        (WorkflowTaskState.AWAITING_APPROVAL, TaskDisplayState.APPROVAL),
+        (WorkflowTaskState.AWAITING_CLARIFICATION, TaskDisplayState.WAITING),
+        (WorkflowTaskState.BLOCKED, TaskDisplayState.BLOCKED),
+        (WorkflowTaskState.FAILED, TaskDisplayState.FAILED),
+        (WorkflowTaskState.SUCCEEDED, TaskDisplayState.COMPLETED),
+        (WorkflowTaskState.CANCELLED, TaskDisplayState.CANCELLED),
+    ],
+)
+def test_canonical_ugai_state_maps_to_notebook_display_state(
+    workflow_state: WorkflowTaskState, display_state: TaskDisplayState
+) -> None:
+    assert display_task_state(workflow_state) is display_state
+    assert WorkflowTaskState(workflow_state.value) is workflow_state
+
+
+def test_display_state_rejects_noncanonical_backend_values() -> None:
+    with pytest.raises(ValueError, match="Unknown UGAI workflow state"):
+        display_task_state("MAGICALLY_DONE")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["get", "cancel"])
+async def test_task_status_rejects_response_with_different_request_id(operation: str) -> None:
+    task_id = uuid4()
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "task_id": str(task_id),
+                    "request_id": str(uuid4()),
+                    "state": "executing",
+                },
+            )
+        )
+    )
+    client = UGAITaskClient(
+        base_url="https://ugai.example",
+        audience="ugai-api",
+        token_provider=TokenProvider(),
+        http_client=http,
+    )
+    request_id = uuid4()
+
+    with pytest.raises(UGAIUnavailable):
+        if operation == "get":
+            await client.get_task(
+                task_id, subject="user-1", tenant_id=uuid4(), request_id=request_id
+            )
+        else:
+            await client.cancel_task(
+                task_id, subject="user-1", tenant_id=uuid4(), request_id=request_id
+            )
+    await http.aclose()
+
