@@ -20,18 +20,18 @@ MAX_BEARER_TOKEN_LENGTH = 8_192
 
 
 class TaskStateCode(StrEnum):
-    ACCEPTED = "ACCEPTED"
-    OBSERVING = "OBSERVING"
-    OBSERVING = "OBSERVING"
-    PLANNED = "PLANNED"
-    RUNNING = "RUNNING"
-    VALIDATION = "VALIDATION"
-    APPROVAL = "APPROVAL"
-    WAITING = "WAITING"
-    BLOCKED = "BLOCKED"
-    FAILED = "FAILED"
-    COMPLETED = "COMPLETED"
-    CANCELLED = "CANCELLED"
+    RECEIVED = "received"
+    OBSERVING = "observing"
+    PLANNING = "planning"
+    EXECUTING = "executing"
+    VERIFYING = "verifying"
+    AWAITING_APPROVAL = "awaiting_approval"
+    AWAITING_CLARIFICATION = "awaiting_clarification"
+    BLOCKED = "blocked"
+    OUTCOME_UNKNOWN = "outcome_unknown"
+    FAILED = "failed"
+    SUCCEEDED = "succeeded"
+    CANCELLED = "cancelled"
 
 
 class UGAIClientError(RuntimeError):
@@ -64,21 +64,13 @@ class TaskSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     intent: str = Field(min_length=1, max_length=4000)
+    context: str = Field(default="", max_length=20000)
     workspace_id: UUID
     notebook_id: UUID | None = None
     cell_revision: str | None = Field(default=None, max_length=128)
     artifacts: tuple[ArtifactReference, ...] = Field(default=(), max_length=32)
     requested_capabilities: tuple[str, ...] = Field(default=(), max_length=32)
 
-
-class TaskInputReceipt(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    input_ref: UUID
-    input_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    project_id: str = Field(min_length=1, max_length=128)
-    workspace_id: UUID
-    expires_at: str
 
 
 class TaskReceipt(BaseModel):
@@ -250,22 +242,19 @@ class UGAITaskClient:
         self,
         submission: TaskSubmission,
         *,
-        project_id: str,
         subject: str,
         tenant_id: UUID,
         request_id: UUID,
         idempotency_key: UUID,
-        task_type: str = "notebook_request",
     ) -> TaskReceipt:
-        if not project_id or len(project_id) > 128:
-            raise ValueError("A trusted, authorized UGAI project_id is required")
-        if not task_type or len(task_type) > 128:
-            raise ValueError("A bounded task_type is required")
+        """Submit one bounded notebook request to UGAI.
 
-        # The same idempotency key is used across both stages. If the client
-        # loses the response after the first or second request, a retry returns
-        # the same protected input and/or task rather than creating duplicates.
-        input_headers = await self._headers(
+        The browser-facing payload never contains actor or tenant identity.
+        UGAI derives those values from the verified service token and encrypts
+        the request before persistence. POST is not retried automatically;
+        callers reconcile a lost response with the same idempotency key.
+        """
+        headers = await self._headers(
             subject=subject,
             tenant_id=tenant_id,
             request_id=request_id,
@@ -273,41 +262,14 @@ class UGAITaskClient:
             scopes=("ugai:tasks:write",),
         )
         payload = submission.model_dump(mode="json")
-        payload["project_id"] = project_id
         try:
-            input_body = await self._request_json(
-                "POST",
-                "/api/v1/task-inputs",
-                headers=input_headers,
-                payload=payload,
-            )
-            protected_input = TaskInputReceipt.model_validate(input_body)
-            if (
-                protected_input.project_id != project_id
-                or protected_input.workspace_id != submission.workspace_id
-            ):
-                raise ValueError("UGAI protected input receipt is outside the requested scope")
-
-            task_headers = await self._headers(
-                subject=subject,
-                tenant_id=tenant_id,
-                request_id=request_id,
-                idempotency_key=idempotency_key,
-                scopes=("ugai:tasks:write",),
-            )
-            task_body = await self._request_json(
+            body = await self._request_json(
                 "POST",
                 "/api/v1/tasks",
-                headers=task_headers,
-                payload={
-                    "project_id": project_id,
-                    "input_ref": str(protected_input.input_ref),
-                    "input_digest": protected_input.input_digest,
-                    "task_type": task_type,
-                    "max_retries": 2,
-                },
+                headers=headers,
+                payload=payload,
             )
-            receipt = TaskReceipt.model_validate(task_body)
+            receipt = TaskReceipt.model_validate(body)
             if receipt.request_id != request_id:
                 raise ValueError("UGAI returned a receipt for a different request")
             return receipt
@@ -339,7 +301,10 @@ class UGAITaskClient:
         self, task_id: UUID, *, subject: str, tenant_id: UUID, request_id: UUID
     ) -> TaskStatus:
         headers = await self._headers(
-            subject=subject, tenant_id=tenant_id, request_id=request_id
+            subject=subject,
+            tenant_id=tenant_id,
+            request_id=request_id,
+            scopes=("ugai:tasks:cancel",),
         )
         try:
             body = await self._request_json(
