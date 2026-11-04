@@ -19,21 +19,59 @@ MAX_RESPONSE_BYTES = 65_536
 MAX_BEARER_TOKEN_LENGTH = 8_192
 
 
-class TaskStateCode(StrEnum):
+class WorkflowTaskState(StrEnum):
+    """Canonical state values emitted by UGAI's durable workflow state machine."""
+
+    RECEIVED = "received"
+    OBSERVING = "observing"
+    PLANNING = "planning"
+    EXECUTING = "executing"
+    VERIFYING = "verifying"
+    AWAITING_APPROVAL = "awaiting_approval"
+    AWAITING_CLARIFICATION = "awaiting_clarification"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+    SUCCEEDED = "succeeded"
+    CANCELLED = "cancelled"
+
+
+class TaskDisplayState(StrEnum):
+    """Notebook-facing presentation states; never persisted as workflow states."""
+
     ACCEPTED = "ACCEPTED"
-    CREATED = "CREATED"
     PLANNED = "PLANNED"
-    ASSIGNED = "ASSIGNED"
     RUNNING = "RUNNING"
-    REVIEW = "REVIEW"
     VALIDATION = "VALIDATION"
     APPROVAL = "APPROVAL"
-    COMPLETED = "COMPLETED"
     WAITING = "WAITING"
     BLOCKED = "BLOCKED"
     FAILED = "FAILED"
+    COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
-    EXPIRED = "EXPIRED"
+
+
+_DISPLAY_STATE = {
+    WorkflowTaskState.RECEIVED: TaskDisplayState.ACCEPTED,
+    WorkflowTaskState.OBSERVING: TaskDisplayState.PLANNED,
+    WorkflowTaskState.PLANNING: TaskDisplayState.PLANNED,
+    WorkflowTaskState.EXECUTING: TaskDisplayState.RUNNING,
+    WorkflowTaskState.VERIFYING: TaskDisplayState.VALIDATION,
+    WorkflowTaskState.AWAITING_APPROVAL: TaskDisplayState.APPROVAL,
+    WorkflowTaskState.AWAITING_CLARIFICATION: TaskDisplayState.WAITING,
+    WorkflowTaskState.BLOCKED: TaskDisplayState.BLOCKED,
+    WorkflowTaskState.FAILED: TaskDisplayState.FAILED,
+    WorkflowTaskState.SUCCEEDED: TaskDisplayState.COMPLETED,
+    WorkflowTaskState.CANCELLED: TaskDisplayState.CANCELLED,
+}
+
+
+def display_task_state(state: WorkflowTaskState | str) -> TaskDisplayState:
+    """Map a canonical UGAI state to a display-only Notebook state."""
+    try:
+        canonical = WorkflowTaskState(state)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Unknown UGAI workflow state") from exc
+    return _DISPLAY_STATE[canonical]
 
 
 class UGAIClientError(RuntimeError):
@@ -50,7 +88,7 @@ class UGAIAuthenticationError(UGAIClientError):
 
 class UGAITokenProvider(Protocol):
     async def get_access_token(
-        self, *, audience: str, scopes: tuple[str, ...], subject: str, tenant_id: UUID
+        self, *, audience: str, scopes: tuple[str, ...], subject: str, tenant_id: UUID, workspace_id: UUID
     ) -> str: ...
 
 
@@ -66,6 +104,7 @@ class TaskSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     intent: str = Field(min_length=1, max_length=4000)
+    context: str = Field(default="", max_length=20_000)
     workspace_id: UUID
     notebook_id: UUID | None = None
     cell_revision: str | None = Field(default=None, max_length=128)
@@ -78,18 +117,26 @@ class TaskReceipt(BaseModel):
 
     task_id: UUID
     request_id: UUID
-    state: TaskStateCode
+    state: WorkflowTaskState
     created_at: str | None = None
 
 
 class TaskStatus(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     task_id: UUID
     request_id: UUID
-    state: TaskStateCode
-    result_reference: str | None = None
-    error_code: str | None = None
+    state: WorkflowTaskState
+    result_reference: str | None = Field(default=None, max_length=512)
+    error_code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_:-]{0,127}$")
+
+
+class TaskResultResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: UUID
+    request_id: UUID
+    result: dict[str, object]
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -190,17 +237,24 @@ class UGAITaskClient:
         *,
         subject: str,
         tenant_id: UUID,
+        workspace_id: UUID,
         request_id: UUID,
+        scopes: tuple[str, ...],
         idempotency_key: UUID | None = None,
     ) -> dict[str, str]:
         if not subject or len(subject) > 255:
             raise UGAIAuthenticationError("A verified subject is required")
+        if not isinstance(scopes, tuple) or scopes not in {
+            ("ugai:tasks:write",), ("ugai:tasks:read",), ("ugai:tasks:cancel",)
+        }:
+            raise UGAIAuthenticationError("A valid least-privilege task scope is required")
         try:
             token = await self._tokens.get_access_token(
                 audience=self._audience,
-                scopes=("ugai:tasks:write",),
+                scopes=scopes,
                 subject=subject,
                 tenant_id=tenant_id,
+                workspace_id=workspace_id,
             )
         except Exception as exc:
             raise UGAIAuthenticationError("Could not obtain UGAI service token") from exc
@@ -249,7 +303,9 @@ class UGAITaskClient:
         headers = await self._headers(
             subject=subject,
             tenant_id=tenant_id,
+            workspace_id=submission.workspace_id,
             request_id=request_id,
+            scopes=("ugai:tasks:write",),
             idempotency_key=idempotency_key,
         )
         try:
@@ -268,10 +324,11 @@ class UGAITaskClient:
             ) from exc
 
     async def get_task(
-        self, task_id: UUID, *, subject: str, tenant_id: UUID, request_id: UUID
+        self, task_id: UUID, *, subject: str, tenant_id: UUID, workspace_id: UUID, request_id: UUID
     ) -> TaskStatus:
         headers = await self._headers(
-            subject=subject, tenant_id=tenant_id, request_id=request_id
+            subject=subject, tenant_id=tenant_id, workspace_id=workspace_id, request_id=request_id,
+            scopes=("ugai:tasks:read",),
         )
         try:
             body = await self._request_json(
@@ -280,15 +337,18 @@ class UGAITaskClient:
             status = TaskStatus.model_validate(body)
             if status.task_id != task_id:
                 raise ValueError("UGAI returned a status for a different task")
+            if status.request_id != request_id:
+                raise ValueError("UGAI returned a status for a different request")
             return status
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable("UGAI task status request failed") from exc
 
     async def cancel_task(
-        self, task_id: UUID, *, subject: str, tenant_id: UUID, request_id: UUID
+        self, task_id: UUID, *, subject: str, tenant_id: UUID, workspace_id: UUID, request_id: UUID
     ) -> TaskStatus:
         headers = await self._headers(
-            subject=subject, tenant_id=tenant_id, request_id=request_id
+            subject=subject, tenant_id=tenant_id, workspace_id=workspace_id, request_id=request_id,
+            scopes=("ugai:tasks:cancel",),
         )
         try:
             body = await self._request_json(
@@ -297,6 +357,39 @@ class UGAITaskClient:
             status = TaskStatus.model_validate(body)
             if status.task_id != task_id:
                 raise ValueError("UGAI returned a cancellation for a different task")
+            if status.request_id != request_id:
+                raise ValueError("UGAI returned a cancellation for a different request")
             return status
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable("UGAI task cancellation request failed") from exc
+
+    async def get_task_result(
+        self,
+        task_id: UUID,
+        *,
+        subject: str,
+        tenant_id: UUID,
+        workspace_id: UUID,
+        request_id: UUID,
+    ) -> TaskResultResponse:
+        headers = await self._headers(
+            subject=subject,
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            request_id=request_id,
+            scopes=("ugai:tasks:read",),
+        )
+        try:
+            body = await self._request_json(
+                "GET", f"/api/v1/tasks/{task_id}/result", headers=headers
+            )
+            result = TaskResultResponse.model_validate(body)
+            if result.task_id != task_id:
+                raise ValueError("UGAI returned a result for a different task")
+            if result.request_id != request_id:
+                raise ValueError("UGAI returned a result for a different request")
+            if result.result.get("task_id") != str(task_id):
+                raise ValueError("UGAI result payload is bound to a different task")
+            return result
+        except (httpx.HTTPError, ValueError, ValidationError) as exc:
+            raise UGAIUnavailable("UGAI task result request failed") from exc
