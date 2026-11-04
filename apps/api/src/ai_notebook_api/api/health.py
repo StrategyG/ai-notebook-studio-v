@@ -52,6 +52,9 @@ def readiness(
         "required_schema_present": required_schema_present,
         "authentication_configured": settings.auth_configured,
         "jwks_reachable": jwks_reachable,
+        "production_database_tls_policy": (
+            settings.app_env != "production" or settings.database_tls_verified
+        ),
     }
     ready = all(checks.values())
     if not ready:
@@ -60,7 +63,8 @@ def readiness(
         "status": "ready" if ready else "not_ready",
         "checks": checks,
         "note": (
-            "Readiness verifies database connectivity, required base tables and JWKS reachability. "
+            "Readiness verifies database connectivity, required base tables, JWKS reachability "
+            "and the production PostgreSQL TLS policy. Production requires sslmode=verify-full. "
             "It does not replace migration-version checks, live token acceptance, tenant-isolation "
             "tests, or full production acceptance."
         ),
