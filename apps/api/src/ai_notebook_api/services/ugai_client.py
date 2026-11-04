@@ -229,14 +229,20 @@ class UGAITaskClient:
         subject: str,
         tenant_id: UUID,
         request_id: UUID,
+        scopes: tuple[str, ...],
         idempotency_key: UUID | None = None,
     ) -> dict[str, str]:
         if not subject or len(subject) > 255:
             raise UGAIAuthenticationError("A verified subject is required")
+        allowed_scopes = {"ugai:tasks:write", "ugai:tasks:read", "ugai:tasks:cancel"}
+        if not isinstance(scopes, tuple) or scopes not in {
+            ("ugai:tasks:write",), ("ugai:tasks:read",), ("ugai:tasks:cancel",)
+        }:
+            raise UGAIAuthenticationError("A valid least-privilege task scope is required")
         try:
             token = await self._tokens.get_access_token(
                 audience=self._audience,
-                scopes=("ugai:tasks:write",),
+                scopes=scopes,
                 subject=subject,
                 tenant_id=tenant_id,
             )
@@ -288,6 +294,7 @@ class UGAITaskClient:
             subject=subject,
             tenant_id=tenant_id,
             request_id=request_id,
+            scopes=("ugai:tasks:write",),
             idempotency_key=idempotency_key,
         )
         try:
@@ -309,7 +316,8 @@ class UGAITaskClient:
         self, task_id: UUID, *, subject: str, tenant_id: UUID, request_id: UUID
     ) -> TaskStatus:
         headers = await self._headers(
-            subject=subject, tenant_id=tenant_id, request_id=request_id
+            subject=subject, tenant_id=tenant_id, request_id=request_id,
+            scopes=("ugai:tasks:read",),
         )
         try:
             body = await self._request_json(
@@ -328,7 +336,8 @@ class UGAITaskClient:
         self, task_id: UUID, *, subject: str, tenant_id: UUID, request_id: UUID
     ) -> TaskStatus:
         headers = await self._headers(
-            subject=subject, tenant_id=tenant_id, request_id=request_id
+            subject=subject, tenant_id=tenant_id, request_id=request_id,
+            scopes=("ugai:tasks:cancel",),
         )
         try:
             body = await self._request_json(
