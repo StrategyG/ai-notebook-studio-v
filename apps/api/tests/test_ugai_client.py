@@ -66,6 +66,7 @@ async def test_submit_task_binds_identity_to_token_and_idempotency() -> None:
     assert request.headers["X-Request-ID"] == str(request_id)
     assert provider.calls[0]["subject"] == "user-123"
     assert provider.calls[0]["tenant_id"] == tenant_id
+    assert provider.calls[0]["scopes"] == ("ugai:tasks:write",)
     assert b"tenant_id" not in request.content
     assert b"subject" not in request.content
     await http.aclose()
@@ -351,3 +352,43 @@ async def test_task_status_rejects_response_with_different_request_id(operation:
             )
     await http.aclose()
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("operation", "expected_scope"),
+    [("get", "ugai:tasks:read"), ("cancel", "ugai:tasks:cancel")],
+)
+async def test_task_client_requests_operation_specific_scope(
+    operation: str, expected_scope: str
+) -> None:
+    task_id = uuid4()
+    provider = TokenProvider()
+    http = httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200,
+                json={
+                    "task_id": str(task_id),
+                    "request_id": request.headers["X-Request-ID"],
+                    "state": "received",
+                },
+            )
+        )
+    )
+    client = UGAITaskClient(
+        base_url="https://ugai.example",
+        audience="ugai-api",
+        token_provider=provider,
+        http_client=http,
+    )
+    request_id = uuid4()
+    if operation == "get":
+        await client.get_task(
+            task_id, subject="user-1", tenant_id=uuid4(), request_id=request_id
+        )
+    else:
+        await client.cancel_task(
+            task_id, subject="user-1", tenant_id=uuid4(), request_id=request_id
+        )
+    assert provider.calls[0]["scopes"] == (expected_scope,)
+    await http.aclose()
+\n
