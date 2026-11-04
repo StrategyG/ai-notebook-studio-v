@@ -7,7 +7,7 @@ on:
       - 'apps/api/**'
       - '.github/workflows/python-ci.yml'
   pull_request:
-    branches: [main, feat/institutional-v6-auth-foundation]
+    branches: [main, feat/institutional-v6-auth-foundation, integration/ugai-im19-v1]
     paths:
       - 'apps/api/**'
       - '.github/workflows/python-ci.yml'
