@@ -5,12 +5,12 @@ import pytest
 
 from ai_notebook_api.services.ugai_client import (
     MAX_RESPONSE_BYTES,
+    TaskDisplayState,
     TaskReceipt,
     TaskSubmission,
     UGAIAuthenticationError,
     UGAITaskClient,
     UGAIUnavailable,
-    TaskDisplayState,
     WorkflowTaskState,
     display_task_state,
 )
