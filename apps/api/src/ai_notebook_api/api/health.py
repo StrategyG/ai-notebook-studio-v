@@ -53,7 +53,7 @@ def readiness(
         "authentication_configured": settings.auth_configured,
         "jwks_reachable": jwks_reachable,
         "production_database_tls_policy": (
-            settings.app_env != "production" or settings.database_tls_verified
+            settings.app_env not in {"production", "prod"} or settings.database_tls_verified
         ),
     }
     ready = all(checks.values())
