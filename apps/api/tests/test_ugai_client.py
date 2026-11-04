@@ -95,7 +95,8 @@ async def test_client_fails_closed_when_token_provider_returns_empty_token() -> 
     )
     with pytest.raises(UGAIAuthenticationError):
         await client.get_task(
-            uuid4(), subject="user-1", tenant_id=uuid4(), request_id=uuid4()
+            uuid4(), subject="user-1", tenant_id=uuid4(),
+                workspace_id=uuid4(), request_id=uuid4()
         )
     await http.aclose()
 
@@ -278,6 +279,7 @@ async def test_task_status_rejects_response_for_different_task(operation: str) -
                 requested_task_id,
                 subject="user-1",
                 tenant_id=uuid4(),
+                workspace_id=uuid4(),
                 request_id=uuid4(),
             )
         else:
@@ -285,6 +287,7 @@ async def test_task_status_rejects_response_for_different_task(operation: str) -
                 requested_task_id,
                 subject="user-1",
                 tenant_id=uuid4(),
+                workspace_id=uuid4(),
                 request_id=uuid4(),
             )
     await http.aclose()
@@ -344,11 +347,13 @@ async def test_task_status_rejects_response_with_different_request_id(operation:
     with pytest.raises(UGAIUnavailable):
         if operation == "get":
             await client.get_task(
-                task_id, subject="user-1", tenant_id=uuid4(), request_id=request_id
+                task_id, subject="user-1", tenant_id=uuid4(),
+                workspace_id=uuid4(), request_id=request_id
             )
         else:
             await client.cancel_task(
-                task_id, subject="user-1", tenant_id=uuid4(), request_id=request_id
+                task_id, subject="user-1", tenant_id=uuid4(),
+                workspace_id=uuid4(), request_id=request_id
             )
     await http.aclose()
 
@@ -383,11 +388,13 @@ async def test_task_client_requests_operation_specific_scope(
     request_id = uuid4()
     if operation == "get":
         await client.get_task(
-            task_id, subject="user-1", tenant_id=uuid4(), request_id=request_id
+            task_id, subject="user-1", tenant_id=uuid4(),
+                workspace_id=uuid4(), request_id=request_id
         )
     else:
         await client.cancel_task(
-            task_id, subject="user-1", tenant_id=uuid4(), request_id=request_id
+            task_id, subject="user-1", tenant_id=uuid4(),
+                workspace_id=uuid4(), request_id=request_id
         )
     assert provider.calls[0]["scopes"] == (expected_scope,)
     await http.aclose()
