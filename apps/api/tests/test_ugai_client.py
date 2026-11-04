@@ -66,6 +66,7 @@ async def test_submit_task_binds_identity_to_token_and_idempotency() -> None:
     assert request.headers["X-Request-ID"] == str(request_id)
     assert provider.calls[0]["subject"] == "user-123"
     assert provider.calls[0]["tenant_id"] == tenant_id
+    assert provider.calls[0]["workspace_id"] == submission.workspace_id
     assert provider.calls[0]["scopes"] == ("ugai:tasks:write",)
     assert b"tenant_id" not in request.content
     assert b"subject" not in request.content
