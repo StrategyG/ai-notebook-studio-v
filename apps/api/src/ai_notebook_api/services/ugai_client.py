@@ -234,7 +234,6 @@ class UGAITaskClient:
     ) -> dict[str, str]:
         if not subject or len(subject) > 255:
             raise UGAIAuthenticationError("A verified subject is required")
-        allowed_scopes = {"ugai:tasks:write", "ugai:tasks:read", "ugai:tasks:cancel"}
         if not isinstance(scopes, tuple) or scopes not in {
             ("ugai:tasks:write",), ("ugai:tasks:read",), ("ugai:tasks:cancel",)
         }:
