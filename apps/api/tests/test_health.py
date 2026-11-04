@@ -166,3 +166,30 @@ def test_production_readiness_accepts_verified_database_tls(monkeypatch):
     assert response.status_code == 200
     assert response.json()["checks"]["production_database_tls_policy"] is True
     get_settings.cache_clear()
+
+
+
+def test_prod_alias_requires_verified_database_tls(monkeypatch):
+    monkeypatch.setenv("APP_ENV", " prod ")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example:5432/app?sslmode=require")
+    monkeypatch.setenv("AUTH_JWKS_URL", "https://identity.example/.well-known/jwks.json")
+    monkeypatch.setenv("AUTH_ISSUER", "https://identity.example/")
+    monkeypatch.setenv("AUTH_AUDIENCE", "ai-notebook-api")
+    monkeypatch.setattr(
+        "ai_notebook_api.api.health._database_health",
+        lambda _settings: (True, True),
+    )
+    monkeypatch.setattr(
+        "ai_notebook_api.api.health.identity_provider_ready",
+        lambda _settings: True,
+    )
+    get_settings.cache_clear()
+    response = client.get("/health/ready")
+    assert response.status_code == 503
+    assert response.json()["checks"]["production_database_tls_policy"] is False
+    get_settings.cache_clear()
+
+
+def test_environment_name_is_trimmed_and_normalized():
+    settings = Settings.from_environment()
+    assert isinstance(settings.app_env, str)
