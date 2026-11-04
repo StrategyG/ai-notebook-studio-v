@@ -22,19 +22,16 @@ MAX_BEARER_TOKEN_LENGTH = 8_192
 class TaskStateCode(StrEnum):
     ACCEPTED = "ACCEPTED"
     OBSERVING = "OBSERVING"
-    CREATED = "CREATED"
+    OBSERVING = "OBSERVING"
     PLANNED = "PLANNED"
-    ASSIGNED = "ASSIGNED"
     RUNNING = "RUNNING"
-    REVIEW = "REVIEW"
     VALIDATION = "VALIDATION"
     APPROVAL = "APPROVAL"
-    COMPLETED = "COMPLETED"
     WAITING = "WAITING"
     BLOCKED = "BLOCKED"
     FAILED = "FAILED"
+    COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
-    EXPIRED = "EXPIRED"
 
 
 class UGAIClientError(RuntimeError):
@@ -285,7 +282,10 @@ class UGAITaskClient:
                 payload=payload,
             )
             protected_input = TaskInputReceipt.model_validate(input_body)
-            if protected_input.project_id != project_id or protected_input.workspace_id != submission.workspace_id:
+            if (
+                protected_input.project_id != project_id
+                or protected_input.workspace_id != submission.workspace_id
+            ):
                 raise ValueError("UGAI protected input receipt is outside the requested scope")
 
             task_headers = await self._headers(
