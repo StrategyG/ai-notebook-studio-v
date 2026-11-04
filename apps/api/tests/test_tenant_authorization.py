@@ -52,7 +52,6 @@ def test_active_membership_is_resolved_from_database_not_token_roles(session: Se
         TenantMembership(
             tenant_id=TENANT_A,
             issuer=OIDC_ISSUER,
-            issuer=OIDC_ISSUER,
             subject="user-1",
             role="admin",
             status="active",
