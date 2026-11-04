@@ -7,8 +7,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     JSON,
     BigInteger,
-    Index,
     CheckConstraint,
+    Index,
     DateTime,
     LargeBinary,
     String,
