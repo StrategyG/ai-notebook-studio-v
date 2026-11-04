@@ -104,6 +104,7 @@ class TaskSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     intent: str = Field(min_length=1, max_length=4000)
+    context: str = Field(default="", max_length=20_000)
     workspace_id: UUID
     notebook_id: UUID | None = None
     cell_revision: str | None = Field(default=None, max_length=128)
@@ -128,6 +129,14 @@ class TaskStatus(BaseModel):
     state: WorkflowTaskState
     result_reference: str | None = Field(default=None, max_length=512)
     error_code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_:-]{0,127}$")
+
+
+class TaskResultResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: UUID
+    request_id: UUID
+    result: dict[str, object]
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -353,3 +362,34 @@ class UGAITaskClient:
             return status
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable("UGAI task cancellation request failed") from exc
+
+    async def get_task_result(
+        self,
+        task_id: UUID,
+        *,
+        subject: str,
+        tenant_id: UUID,
+        workspace_id: UUID,
+        request_id: UUID,
+    ) -> TaskResultResponse:
+        headers = await self._headers(
+            subject=subject,
+            tenant_id=tenant_id,
+            workspace_id=workspace_id,
+            request_id=request_id,
+            scopes=("ugai:tasks:read",),
+        )
+        try:
+            body = await self._request_json(
+                "GET", f"/api/v1/tasks/{task_id}/result", headers=headers
+            )
+            result = TaskResultResponse.model_validate(body)
+            if result.task_id != task_id:
+                raise ValueError("UGAI returned a result for a different task")
+            if result.request_id != request_id:
+                raise ValueError("UGAI returned a result for a different request")
+            if result.result.get("task_id") != str(task_id):
+                raise ValueError("UGAI result payload is bound to a different task")
+            return result
+        except (httpx.HTTPError, ValueError, ValidationError) as exc:
+            raise UGAIUnavailable("UGAI task result request failed") from exc
