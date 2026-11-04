@@ -24,6 +24,20 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ai_notebook_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ai_notebook_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: apps/api
@@ -44,3 +58,60 @@ jobs:
         run: ruff check src tests
       - name: Unit and API contract tests
         run: pytest --cov=ai_notebook_api --cov-report=term-missing --cov-fail-under=85
+      - name: Provision restricted PostgreSQL RLS test role and migrations
+        env:
+          MIGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_notebook_test
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import psycopg
+
+          url = os.environ["MIGRATION_DATABASE_URL"]
+          with psycopg.connect(url, autocommit=True) as connection:
+              connection.execute(
+                  "CREATE ROLE app_runtime LOGIN PASSWORD 'app-test-password' NOSUPERUSER NOBYPASSRLS"
+              )
+              for migration in sorted(Path("migrations").glob("*.sql")):
+                  connection.execute(migration.read_text(), prepare=False)
+              connection.execute(
+                  "GRANT USAGE ON SCHEMA public TO app_runtime; "
+                  "GRANT SELECT ON tenant_memberships TO app_runtime; "
+                  "GRANT SELECT, INSERT ON audit_events TO app_runtime; "
+                  "GRANT SELECT, INSERT, UPDATE ON outbox_events TO app_runtime; "
+                  "GRANT SELECT, INSERT, UPDATE ON provider_credentials TO app_runtime"
+              )
+              connection.execute(
+                  "INSERT INTO tenant_memberships (tenant_id, subject, role, status) VALUES "
+                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 'rls-user-a', 'member', 'active'), "
+                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 'rls-user-b', 'member', 'active')"
+              )
+              connection.execute(
+                  "INSERT INTO audit_events "
+                  "(tenant_id, sequence, actor_subject, action, resource_type, resource_id, "
+                  "request_id, payload, previous_hash, event_hash) VALUES "
+                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 1, 'user-a', 'test', 'test', "
+                  "'a', 'req-a', '{}'::jsonb, repeat('0', 64), repeat('1', 64)), "
+                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 1, 'user-b', 'test', 'test', "
+                  "'b', 'req-b', '{}'::jsonb, repeat('0', 64), repeat('2', 64))"
+              )
+              connection.execute(
+                  "INSERT INTO outbox_events "
+                  "(tenant_id, idempotency_key, event_type, aggregate_type, aggregate_id) VALUES "
+                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 'seed-a', 'test', 'test', 'a'), "
+                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 'seed-b', 'test', 'test', 'b')"
+              )
+              connection.execute(
+                  "INSERT INTO provider_credentials "
+                  "(tenant_id, provider_id, label, key_id, nonce, encrypted_secret, created_by) VALUES "
+                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 'openai', 'ci', 'ci', "
+                  "decode(repeat('00', 12), 'hex'), decode('01', 'hex'), 'user-a'), "
+                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 'openai', 'ci', 'ci', "
+                  "decode(repeat('00', 12), 'hex'), decode('01', 'hex'), 'user-b')"
+              )
+          PY
+      - name: PostgreSQL row-level security and immutable audit integration tests
+        env:
+          TEST_DATABASE_URL: postgresql://app_runtime:app-test-password@localhost:5432/ai_notebook_test
+          TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_notebook_test
+        run: pytest -q tests/test_postgres_rls.py

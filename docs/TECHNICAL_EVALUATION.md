@@ -22,7 +22,7 @@ The target 9.0–9.3 score is not asserted as achieved.
 
 ## Stage 1 backend skeleton update
 
-A minimal FastAPI/domain package now exists under `apps/api`. It defines task and agent contracts, a task transition state machine, grant intersection, action-bound approval evidence, bounded DAG validation, event metadata and basic health endpoints. Local verification passed 25 tests at 93.78% statement coverage using Python 3.13.5. The GitHub Python CI workflow targets Python 3.12 and is not yet verified. No production DB, JWT verifier, auth endpoints, durable audit/outbox, or integrations are present. This skeleton is not a connected backend and does not justify raising the overall platform readiness score.
+A minimal FastAPI/domain package now exists under `apps/api`. It defines task and agent contracts, a task transition state machine, grant intersection, action-bound approval evidence, bounded DAG validation, event metadata and basic health endpoints. Local verification passed 25 tests at 93.78% coverage using Python 3.13.5. The GitHub Python CI workflow targets Python 3.12 and is not yet verified. No production DB, JWT verifier, auth endpoints, durable audit/outbox, or integrations are present. This skeleton is not a connected backend and does not justify raising the overall platform readiness score.
 
 ## What is verified
 
@@ -53,3 +53,9 @@ A minimal FastAPI/domain package now exists under `apps/api`. It defines task an
 **NO-GO for production release.** The Android wrapper has a better security/build foundation, but the application-level platform described in the master specification is not present yet. The new Stage 0 architecture, protocol, threat and acceptance documents are design deliverables only; they do not imply implementation completion.
 
 For detailed evidence, see [Stage 0 audit](STAGE-0-BASELINE-AUDIT.md), [architecture](PLATFORM-ARCHITECTURE-V5.md), [integration matrix](PROTOCOL-INTEGRATION-MATRIX.md), [test plan](ACCEPTANCE-TEST-PLAN.md) and [implementation roadmap](IMPLEMENTATION-ROADMAP-V5.md).
+
+## V6 feature-branch delta
+
+The branch `feat/institutional-v6-auth-foundation` now contains a JWT/JWKS verification slice with an explicit RS256/ES256 allowlist, issuer/audience/expiry/subject checks, a required UUID tenant claim, a protected identity endpoint and reusable scope enforcement. This is a code-level authentication foundation, not full authorization. Tenant membership, resource ownership, revocation, persistence, RLS and audit storage remain absent. The score table above remains the historical baseline assessment; no new overall score is assigned until the branch test suite and CI evidence are available. Production remains **NO-GO**.
+
+See [V6 authentication security note](SECURITY-AUTH-V6.md) and [V6 implementation status](IMPLEMENTATION-STATUS-V6.md).

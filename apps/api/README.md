@@ -1,6 +1,6 @@
-# AI Notebook Studio API — Stage 1 foundation skeleton
+# AI Notebook Studio API — V6 security foundation
 
-This package is the first backend code foundation in the V5 transformation. It contains a FastAPI modular-monolith shell and framework-independent domain contracts/policies. It does **not** yet connect to a database, Supabase Auth, AI providers, Colab, GitHub, A2A or MCP. No business-write endpoints are exposed.
+This package is an incremental modular-monolith API foundation. V6 adds cryptographic JWT/JWKS access-token verification and a protected identity endpoint. It is **not** a complete production backend.
 
 ## Local development
 
@@ -10,18 +10,30 @@ PYTHONPATH=src pytest
 uvicorn ai_notebook_api.main:app --app-dir src --reload
 ```
 
-The liveness endpoint returns 200. Readiness returns 503 until a PostgreSQL URL and HTTPS identity issuer/JWKS configuration are present. This is a configuration check only: no live database connectivity test or JWT verification is implemented. Never treat a configured URL as a verified dependency.
+## Identity configuration
 
-## Stage 1 code included
+Configure these deployment-controlled variables:
 
-- Versioned task contract and explicit task-state transition table with terminal-state protection.
-- Permission intersection for principal/project/task/agent grants; delegation cannot widen the resulting grant.
-- Action-bound high/critical approval evidence matching exact tenant, project, target, operation, risk and content digest.
-- Dependency DAG validation, topological order, cycle/missing-node detection and bounded delegation depth.
-- Internal agent descriptor with version, capabilities, task types, protocol declarations, trust scope, resource limits and fail-closed eligibility check. This is not an A2A AgentCard wire codec.
-- Versioned event envelope with correlation/idempotency metadata and bounded payload shape. Durable delivery requires a transactional outbox, not yet implemented.
-- Liveness/readiness endpoints that do not report the platform ready by default.
+- `AUTH_JWKS_URL`: HTTPS JWKS endpoint.
+- `AUTH_ISSUER`: exact HTTPS token issuer.
+- `AUTH_AUDIENCE`: expected API audience.
+- `AUTH_ALGORITHMS`: comma-separated allowlist; supported values are RS256 and ES256.
 
-## Not production complete
+The verifier checks the token signature using a key resolved from the configured JWKS endpoint and validates issuer, audience, expiry and subject. A verified token must also carry a UUID `tenant_id` claim. Only the verified subject, tenant identifier, roles and scopes are exposed by `GET /api/v1/me`; the bearer token is never returned.
 
-No database adapter, migrations, RLS, JWT/JWKS signature verification, auth/session route, tenant persistence, approval persistence, audit event store, transactional outbox, rate limiting, provider, Colab, GitHub, Supabase, MCP or A2A transport is included. Readiness remains false unless configuration is provided, and remains only a configuration check until real connectivity and verification are implemented.
+Protected endpoints return 503 when identity configuration is absent and 401 for missing or invalid bearer credentials. `require_scopes` provides a reusable fail-closed scope dependency.
+
+## Important security boundary
+
+JWT verification proves that the configured issuer signed the claims. It does **not** prove that a user is an active member of a tenant, that a role is still current, or that a resource belongs to that tenant. Those checks require authoritative membership/resource persistence and revocation policy, which are not yet implemented. Therefore this commit does not expose notebook, project, agent, MCP, GitHub or other business-write routes.
+
+## Current limitations
+
+- No database connectivity or migrations are wired into the API.
+- No tenant membership lookup, session revocation, authorization database or RLS enforcement.
+- No durable approval store, audit ledger or transactional outbox.
+- No AI provider gateway, BYOK vault, notebook runtime, MCP/A2A transport or integrations.
+- `/health/ready` now checks database connectivity, presence of the required base tables (`tenant_memberships`, `audit_events`, `outbox_events`, `provider_credentials`) and live JWKS reachability. It still does not prove the current migration revision, real token acceptance, tenant isolation, or full staging acceptance.
+- The Android UI payload is not restored by this API change.
+
+Do not deploy this API as production-ready solely because JWT verification is implemented.

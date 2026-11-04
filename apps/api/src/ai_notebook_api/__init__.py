@@ -1,3 +1,3 @@
-"""AI Notebook Studio V5 application API."""
+"""AI Notebook Studio V6 application API."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
