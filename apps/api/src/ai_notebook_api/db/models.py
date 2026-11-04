@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, JSON, BigInteger, DateTime, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, JSON, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ai_notebook_api.db.base import Base
