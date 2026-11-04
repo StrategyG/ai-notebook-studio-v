@@ -42,13 +42,13 @@ jobs:
       - name: Assemble release APK (unsigned validation)
         run: gradle assembleRelease --no-daemon
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ai-notebook-studio-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
       - name: Upload unsigned release APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ai-notebook-studio-release-unsigned
           path: app/build/outputs/apk/release/*.apk
