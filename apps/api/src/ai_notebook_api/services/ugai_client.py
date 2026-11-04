@@ -88,7 +88,7 @@ class UGAIAuthenticationError(UGAIClientError):
 
 class UGAITokenProvider(Protocol):
     async def get_access_token(
-        self, *, audience: str, scopes: tuple[str, ...], subject: str, tenant_id: UUID
+        self, *, audience: str, scopes: tuple[str, ...], subject: str, tenant_id: UUID, workspace_id: UUID
     ) -> str: ...
 
 
@@ -228,6 +228,7 @@ class UGAITaskClient:
         *,
         subject: str,
         tenant_id: UUID,
+        workspace_id: UUID,
         request_id: UUID,
         scopes: tuple[str, ...],
         idempotency_key: UUID | None = None,
@@ -244,6 +245,7 @@ class UGAITaskClient:
                 scopes=scopes,
                 subject=subject,
                 tenant_id=tenant_id,
+                workspace_id=workspace_id,
             )
         except Exception as exc:
             raise UGAIAuthenticationError("Could not obtain UGAI service token") from exc
@@ -292,6 +294,7 @@ class UGAITaskClient:
         headers = await self._headers(
             subject=subject,
             tenant_id=tenant_id,
+            workspace_id=submission.workspace_id,
             request_id=request_id,
             scopes=("ugai:tasks:write",),
             idempotency_key=idempotency_key,
@@ -312,10 +315,10 @@ class UGAITaskClient:
             ) from exc
 
     async def get_task(
-        self, task_id: UUID, *, subject: str, tenant_id: UUID, request_id: UUID
+        self, task_id: UUID, *, subject: str, tenant_id: UUID, workspace_id: UUID, request_id: UUID
     ) -> TaskStatus:
         headers = await self._headers(
-            subject=subject, tenant_id=tenant_id, request_id=request_id,
+            subject=subject, tenant_id=tenant_id, workspace_id=workspace_id, request_id=request_id,
             scopes=("ugai:tasks:read",),
         )
         try:
@@ -332,10 +335,10 @@ class UGAITaskClient:
             raise UGAIUnavailable("UGAI task status request failed") from exc
 
     async def cancel_task(
-        self, task_id: UUID, *, subject: str, tenant_id: UUID, request_id: UUID
+        self, task_id: UUID, *, subject: str, tenant_id: UUID, workspace_id: UUID, request_id: UUID
     ) -> TaskStatus:
         headers = await self._headers(
-            subject=subject, tenant_id=tenant_id, request_id=request_id,
+            subject=subject, tenant_id=tenant_id, workspace_id=workspace_id, request_id=request_id,
             scopes=("ugai:tasks:cancel",),
         )
         try:
