@@ -19,21 +19,59 @@ MAX_RESPONSE_BYTES = 65_536
 MAX_BEARER_TOKEN_LENGTH = 8_192
 
 
-class TaskStateCode(StrEnum):
+class WorkflowTaskState(StrEnum):
+    """Canonical state values emitted by UGAI's durable workflow state machine."""
+
+    RECEIVED = "received"
+    OBSERVING = "observing"
+    PLANNING = "planning"
+    EXECUTING = "executing"
+    VERIFYING = "verifying"
+    AWAITING_APPROVAL = "awaiting_approval"
+    AWAITING_CLARIFICATION = "awaiting_clarification"
+    BLOCKED = "blocked"
+    FAILED = "failed"
+    SUCCEEDED = "succeeded"
+    CANCELLED = "cancelled"
+
+
+class TaskDisplayState(StrEnum):
+    """Notebook-facing presentation states; never persisted as workflow states."""
+
     ACCEPTED = "ACCEPTED"
-    CREATED = "CREATED"
     PLANNED = "PLANNED"
-    ASSIGNED = "ASSIGNED"
     RUNNING = "RUNNING"
-    REVIEW = "REVIEW"
     VALIDATION = "VALIDATION"
     APPROVAL = "APPROVAL"
-    COMPLETED = "COMPLETED"
     WAITING = "WAITING"
     BLOCKED = "BLOCKED"
     FAILED = "FAILED"
+    COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
-    EXPIRED = "EXPIRED"
+
+
+_DISPLAY_STATE = {
+    WorkflowTaskState.RECEIVED: TaskDisplayState.ACCEPTED,
+    WorkflowTaskState.OBSERVING: TaskDisplayState.PLANNED,
+    WorkflowTaskState.PLANNING: TaskDisplayState.PLANNED,
+    WorkflowTaskState.EXECUTING: TaskDisplayState.RUNNING,
+    WorkflowTaskState.VERIFYING: TaskDisplayState.VALIDATION,
+    WorkflowTaskState.AWAITING_APPROVAL: TaskDisplayState.APPROVAL,
+    WorkflowTaskState.AWAITING_CLARIFICATION: TaskDisplayState.WAITING,
+    WorkflowTaskState.BLOCKED: TaskDisplayState.BLOCKED,
+    WorkflowTaskState.FAILED: TaskDisplayState.FAILED,
+    WorkflowTaskState.SUCCEEDED: TaskDisplayState.COMPLETED,
+    WorkflowTaskState.CANCELLED: TaskDisplayState.CANCELLED,
+}
+
+
+def display_task_state(state: WorkflowTaskState | str) -> TaskDisplayState:
+    """Map a canonical UGAI state to a display-only Notebook state."""
+    try:
+        canonical = WorkflowTaskState(state)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Unknown UGAI workflow state") from exc
+    return _DISPLAY_STATE[canonical]
 
 
 class UGAIClientError(RuntimeError):
@@ -78,18 +116,18 @@ class TaskReceipt(BaseModel):
 
     task_id: UUID
     request_id: UUID
-    state: TaskStateCode
+    state: WorkflowTaskState
     created_at: str | None = None
 
 
 class TaskStatus(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     task_id: UUID
     request_id: UUID
     state: TaskStateCode
-    result_reference: str | None = None
-    error_code: str | None = None
+    result_reference: str | None = Field(default=None, max_length=512)
+    error_code: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_:-]{0,127}$")
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -280,6 +318,8 @@ class UGAITaskClient:
             status = TaskStatus.model_validate(body)
             if status.task_id != task_id:
                 raise ValueError("UGAI returned a status for a different task")
+            if status.request_id != request_id:
+                raise ValueError("UGAI returned a status for a different request")
             return status
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable("UGAI task status request failed") from exc
@@ -297,6 +337,8 @@ class UGAITaskClient:
             status = TaskStatus.model_validate(body)
             if status.task_id != task_id:
                 raise ValueError("UGAI returned a cancellation for a different task")
+            if status.request_id != request_id:
+                raise ValueError("UGAI returned a cancellation for a different request")
             return status
         except (httpx.HTTPError, ValueError, ValidationError) as exc:
             raise UGAIUnavailable("UGAI task cancellation request failed") from exc
