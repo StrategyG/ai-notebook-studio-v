@@ -190,6 +190,6 @@ def test_prod_alias_requires_verified_database_tls(monkeypatch):
     get_settings.cache_clear()
 
 
-def test_environment_name_is_trimmed_and_normalized():
-    settings = Settings.from_environment()
-    assert isinstance(settings.app_env, str)
+def test_environment_name_is_trimmed_and_normalized(monkeypatch):
+    monkeypatch.setenv("APP_ENV", " prod ")
+    assert Settings.from_environment().app_env == "prod"
