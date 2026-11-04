@@ -36,16 +36,16 @@ Studio talks to IM19 only indirectly through a UGAI-governed workflow. Studio's 
 
 ## 3. Interface status (draft implementation; no live deployment)
 
-UGAI PR #38 now contains draft task-input and task-lifecycle routes plus durable PostgreSQL persistence, but it is stacked on the unmerged UGAI reasoning candidate. Notebook's outbound client in this PR has been aligned to the two-step encrypted-input flow. Neither branch is merged/deployed, and the end-to-end contract is not yet independently approved. Do not treat these endpoints as available in staging or production.
+UGAI PR #37 contains a draft authenticated task-lifecycle API, issuer-scoped actor identity, encrypted server-side task payload storage and durable PostgreSQL workflow state. Notebook's outbound client in this PR now targets the implemented single-request `POST /api/v1/tasks` contract and uses the same state vocabulary. Both branches remain unmerged and no live end-to-end deployment is evidenced. PR #37 is stacked on an unmerged UGAI reasoning candidate and is not mergeable to main yet. Do not treat either service as available in staging or production.
 
 ### Studio API to UGAI
 
-1. POST /api/v1/task-inputs: store the notebook intent, workspace/notebook references and bounded artifact/capability metadata in the UGAI AES-256-GCM input vault. Response returns only input_ref, digest, authorized project/workspace metadata and expiry.
-2. POST /api/v1/tasks: submit project_id + input_ref + digest + allowlisted task_type + retry bound. The task row stores only the opaque input reference and digest, never the raw notebook prompt.
-3. GET /api/v1/tasks/{task_id}: retrieve the projected task state and bounded metadata.
-4. POST /api/v1/tasks/{task_id}/cancel: request a lease-fenced cancellation; a live worker lease returns conflict rather than being silently revoked.
+1. POST /api/v1/tasks: submit bounded intent, context, workspace/notebook/cell references, artifact digests and requested capabilities. Tenant and actor identity are never accepted from the JSON body; UGAI derives them from the verified short-lived token. The UGAI service encrypts the payload with AES-256-GCM before persistence and stores only the encrypted envelope separately from task metadata.
+2. GET /api/v1/tasks/{task_id}: retrieve the projected task state and bounded metadata. UGAI checks tenant, issuer-scoped actor ownership and workspace access before returning it.
+3. POST /api/v1/tasks/{task_id}/cancel: request a lease-fenced cancellation using the dedicated `ugai:tasks:cancel` scope. A task with a live worker lease returns conflict rather than silently revoking the lease.
+4. GET /api/v1/tasks/{task_id}/result: retrieve a result only after the task reaches `succeeded`; result bytes are encrypted at rest and scoped to the same tenant and actor.
 
-The Notebook service must resolve workspace_id → project_id from its authoritative database and active membership. The value passed to the client must be server-derived, not copied from a browser request. That resolver is still a release dependency.
+Notebook never passes actor_id or tenant_id in the payload. Its token provider must bind the verified issuer/subject and tenant into a short-lived token for the exact UGAI audience. UGAI must verify issuer, audience, expiry, signature and role/scope before task creation.
 
 ### UGAI to Studio execution service
 
@@ -59,10 +59,10 @@ The execution request must reference an immutable notebook/cell revision or sour
 
 Carry request_id, task_id, execution_id, idempotency_key, tenant and actor context, notebook/revision identifiers and distributed trace context. IDs used for authorization must be resolved from verified server-side records, not trusted because a client supplied them.
 
-Execution states:
-ACCEPTED -> QUEUED -> RUNNING -> SUCCEEDED | FAILED | CANCELLED.
+UGAI task states:
+`received -> observing -> planning -> executing -> verifying -> succeeded`, with explicit `awaiting_approval`, `awaiting_clarification`, `blocked`, `failed`, `cancelled` and `outcome_unknown` branches.
 
-Cancellation is asynchronous. A timeout or lost response does not prove execution failed; reconcile by execution ID before retrying.
+An uncertain external effect enters `outcome_unknown`, is not claimable or retryable, and can progress only through an unleased reconciliation with a verified evidence digest. Cancellation is asynchronous. A timeout or lost response does not prove execution failed; reconcile by task ID and idempotency key before retrying.
 
 ## 4. Notebook execution isolation
 
@@ -95,8 +95,8 @@ Do not run user code inside the UGAI process, IM19 gateway or API worker process
 | JWT/JWKS verification foundation and protected identity endpoint | Present in V6 feature branch; real issuer integration unverified |
 | Tenant membership, resource ownership authorization and revocation | Not implemented in inspected V6 status |
 | React UI restoration | Blocked; repository status notes the React-named HTML file is an 88-byte placeholder |
-| Studio outbound UGAI task client | Draft implementation in this branch with HTTPS-only transport, identity-bound token provider, request ID, idempotency key, encrypted-input two-step flow and bounded payloads |
-| UGAI task API and durable task store | Draft implementation in UGAI PR #38; CI verified at its current SHA, but not merged/deployed and not yet wired to a production decision worker/result store |
+| Studio outbound UGAI task client | Draft implementation in this branch with HTTPS-only transport, identity-bound token provider, request ID, idempotency key, direct task submission, bounded response parsing and aligned state vocabulary |
+| UGAI task API and durable task store | Draft implementation in UGAI PR #37; issuer-scoped identity, encrypted payload/result storage, durable task state, leases and PostgreSQL migration are under CI. Not merged/deployed; no production decision worker or staging database proof |
 | UGAI outbound Studio execution client | Implemented in UGAI integration branch; uses digest-only source reference, approved runtime profiles and bounded resource limits |
 | Notebook execution API, queue and isolated worker | Not implemented or verified |
 | MCP gateway inside Studio | Not required; must not be duplicated |
@@ -108,7 +108,7 @@ Do not run user code inside the UGAI process, IM19 gateway or API worker process
 1. Complete tenant membership, role freshness, revocation and resource-level authorization in Studio.
 2. Restore maintainable Studio UI source and implement notebook/project persistence.
 3. Implement the isolated notebook execution service and its queue, status, cancellation and artifact APIs.
-4. Approve the canonical task/input contract, finish UGAI's encrypted input vault and authenticated task API, then wire the Studio two-step client after OpenAPI and workspace/project authorization are published.
+4. Approve the canonical task contract, finish UGAI's encrypted payload store and authenticated task API, and wire the single-request Studio client after workspace authorization and consumer compatibility tests pass.
 5. Implement Studio's authenticated execution API, queue and isolated worker; wire the UGAI execution client only after authorization and runtime controls pass.
 6. Connect UGAI to IM19 using the existing audited MCP adapter, a managed OAuth token provider and a durable audit sink.
 7. Add contract tests with fake services, then isolated staging tests with real OAuth audiences and separate tenant identities.
