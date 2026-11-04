@@ -22,7 +22,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The current Android source bundle contains no Java/Kotlin source files.
       # Do not report a false-positive CodeQL configuration failure; scan the
       # actual Python API now. Re-enable java-kotlin when the full Android source
