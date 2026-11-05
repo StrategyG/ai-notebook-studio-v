@@ -120,6 +120,7 @@ class OAuthTokenExchangeProvider:
             or not parsed.hostname
             or parsed.username
             or parsed.password
+            or parsed.query
             or parsed.fragment
         ):
             raise ValueError("UGAI token exchange endpoint must be HTTPS")
@@ -176,13 +177,42 @@ class OAuthTokenExchangeProvider:
             "scope": " ".join(scopes),
         }
         try:
-            response = await self._http.post(
+            async with self._http.stream(
+                "POST",
                 self._endpoint,
                 data=form,
                 auth=(self._client_id, self._client_secret),
                 headers={"Accept": "application/json"},
-            )
-            payload = _json_object(response, max_bytes=16_384)
+            ) as response:
+                response.raise_for_status()
+                media_type = (
+                    response.headers.get("content-type", "")
+                    .split(";", 1)[0]
+                    .strip()
+                    .lower()
+                )
+                if media_type != "application/json" and not media_type.endswith("+json"):
+                    raise ValueError("Token exchange response is not JSON")
+                declared = response.headers.get("content-length")
+                if declared is not None:
+                    try:
+                        size = int(declared)
+                    except ValueError as exc:
+                        raise ValueError("Token exchange content length is invalid") from exc
+                    if size < 0 or size > 16_384:
+                        raise ValueError("Token exchange response exceeds size limit")
+                body = bytearray()
+                async for chunk in response.aiter_bytes():
+                    if len(body) + len(chunk) > 16_384:
+                        raise ValueError("Token exchange response exceeds size limit")
+                    body.extend(chunk)
+                payload = json.loads(
+                    bytes(body),
+                    object_pairs_hook=_unique_json_object,
+                    parse_constant=_reject_json_constant,
+                )
+                if not isinstance(payload, dict):
+                    raise ValueError("Token exchange response must be an object")
         except (httpx.HTTPError, ValueError) as exc:
             raise UGAIAuthenticationError(
                 "Identity provider token exchange failed"
