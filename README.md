@@ -28,7 +28,7 @@ PYTHONPATH=src pytest
 uvicorn ai_notebook_api.main:app --app-dir src --reload
 ```
 
-Readiness returns 503 until PostgreSQL and HTTPS identity configuration are present. Even then it is only a configuration-presence check until database connectivity and JWT verification are implemented. No business write routes are currently exposed.
+Readiness returns 503 until PostgreSQL and HTTPS identity configuration are present. Tenant-protected APIs resolve active membership and role from the database; token-supplied role claims do not grant tenant permissions. UGAI task forwarding is separately disabled until server-side OAuth token exchange is configured.
 
 ## Product status
 
@@ -49,3 +49,44 @@ The feature branch `feat/institutional-v6-auth-foundation` adds a first verified
 - Fail-closed behavior when identity configuration is absent.
 
 See [V6 authentication security note](docs/SECURITY-AUTH-V6.md). This is not complete tenant authorization: membership lookup, persistence, RLS, revocation and resource ownership checks remain unimplemented. The production release decision remains **NO-GO**. These changes are on the feature branch until its pull request is reviewed and merged.
+
+
+## UGAI task integration (v1)
+
+The Notebook API can proxy the canonical UGAI task lifecycle through a server-side
+OAuth 2.0 token-exchange flow. The browser never receives UGAI OAuth client
+credentials or the exchanged UGAI token.
+
+Routes:
+- `POST /api/v1/tasks` — requires an active tenant membership with
+  `agents:run`; accepts an `Idempotency-Key` UUID.
+- `GET /api/v1/tasks/{task_id}` — requires an active membership with
+  `notebooks:read`.
+- `POST /api/v1/tasks/{task_id}/cancel` — requires `agents:run`.
+
+All three routes validate the Notebook access token, then resolve the active
+tenant membership and application role from the database. The server exchanges
+the inbound user token for a short-lived token whose audience is UGAI. UGAI
+independently validates the exchanged token and checks project access. The
+task payload does not contain caller-supplied `tenant_id`, `actor_id`, or
+authorization roles.
+
+Configure the API process through a secret manager:
+- `UGAI_ENABLED=true`
+- `UGAI_BASE_URL=https://...` (HTTPS origin only)
+- `UGAI_AUDIENCE=...` (the exact UGAI API audience)
+- `UGAI_TOKEN_ENDPOINT=https://...` (RFC 8693 token exchange endpoint)
+- `UGAI_CLIENT_ID=...`
+- `UGAI_CLIENT_SECRET=...`
+
+Production startup fails closed if UGAI forwarding is not enabled or this
+configuration is incomplete. The identity provider must preserve or explicitly
+map the verified user subject, tenant and role/project claims into a token
+whose issuer, signing keys and audience are accepted by UGAI. Token exchange
+failure and UGAI outages do not trigger an automatic task resubmission.
+Clients reconcile uncertain submissions using the same idempotency key.
+
+The API implementation and tests do not prove that a real identity provider
+supports token exchange or that Notebook and UGAI share the same production
+issuer/claim mapping. Live staging authentication, tenant isolation and
+Notebook → UGAI task execution remain release gates.
