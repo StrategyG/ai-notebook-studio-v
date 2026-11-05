@@ -82,9 +82,11 @@ jobs:
                   "GRANT SELECT, INSERT, UPDATE ON provider_credentials TO app_runtime"
               )
               connection.execute(
-                  "INSERT INTO tenant_memberships (tenant_id, subject, role, status) VALUES "
-                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 'rls-user-a', 'member', 'active'), "
-                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 'rls-user-b', 'member', 'active')"
+                  "INSERT INTO tenant_memberships (tenant_id, issuer, subject, role, status) VALUES "
+                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 'https://identity.example/', "
+                  "'rls-user-a', 'member', 'active'), "
+                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 'https://identity.example/', "
+                  "'rls-user-b', 'member', 'active')"
               )
               connection.execute(
                   "INSERT INTO audit_events "

@@ -23,7 +23,10 @@ from ai_notebook_api.security.tenant import (
 
 TENANT_A = UUID("d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e")
 TENANT_B = UUID("a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c")
+OIDC_ISSUER = "https://identity.example/"
+OTHER_OIDC_ISSUER = "https://other-identity.example/"
 PRINCIPAL = Principal(
+    issuer=OIDC_ISSUER,
     subject="user-1",
     tenant_id=TENANT_A,
     roles=frozenset({"owner"}),
@@ -48,6 +51,7 @@ def test_active_membership_is_resolved_from_database_not_token_roles(session: Se
     session.add(
         TenantMembership(
             tenant_id=TENANT_A,
+            issuer=OIDC_ISSUER,
             subject="user-1",
             role="admin",
             status="active",
@@ -55,16 +59,76 @@ def test_active_membership_is_resolved_from_database_not_token_roles(session: Se
     )
     session.commit()
 
-    membership = resolve_active_membership(session, subject="user-1", tenant_id=TENANT_A)
+    membership = resolve_active_membership(session, issuer=OIDC_ISSUER, subject="user-1", tenant_id=TENANT_A)
 
     assert membership.role == "admin"
     assert membership.status == "active"
+
+
+def test_membership_resolution_is_scoped_to_issuer_and_subject(session: Session) -> None:
+    session.add_all(
+        [
+            TenantMembership(
+                tenant_id=TENANT_A,
+                issuer=OIDC_ISSUER,
+                subject="same-subject",
+                role="viewer",
+                status="active",
+            ),
+            TenantMembership(
+                tenant_id=TENANT_A,
+                issuer=OTHER_OIDC_ISSUER,
+                subject="same-subject",
+                role="admin",
+                status="active",
+            ),
+        ]
+    )
+    session.commit()
+
+    membership = resolve_active_membership(
+        session,
+        issuer=OTHER_OIDC_ISSUER,
+        subject="same-subject",
+        tenant_id=TENANT_A,
+    )
+    assert membership.role == "admin"
+
+    with pytest.raises(TenantAuthorizationError):
+        resolve_active_membership(
+            session,
+            issuer="https://untrusted-identity.example/",
+            subject="same-subject",
+            tenant_id=TENANT_A,
+        )
+
+
+def test_legacy_membership_without_issuer_never_authorizes(session: Session) -> None:
+    session.add(
+        TenantMembership(
+            tenant_id=TENANT_A,
+            issuer=None,
+            subject="legacy-user",
+            role="owner",
+            status="active",
+        )
+    )
+    session.commit()
+
+    with pytest.raises(TenantAuthorizationError):
+        resolve_active_membership(
+            session,
+            issuer=OIDC_ISSUER,
+            subject="legacy-user",
+            tenant_id=TENANT_A,
+        )
 
 
 def test_api_membership_rejects_supabase_only_role(session: Session) -> None:
     session.add(
         TenantMembership(
             tenant_id=TENANT_A,
+            issuer=OIDC_ISSUER,
             subject="user-1",
             role="billing_viewer",
             status="active",
@@ -80,6 +144,7 @@ def test_membership_from_another_tenant_is_not_authorized(session: Session) -> N
     session.add(
         TenantMembership(
             tenant_id=TENANT_B,
+            issuer=OIDC_ISSUER,
             subject="user-1",
             role="owner",
             status="active",
@@ -88,13 +153,14 @@ def test_membership_from_another_tenant_is_not_authorized(session: Session) -> N
     session.commit()
 
     with pytest.raises(TenantAuthorizationError):
-        resolve_active_membership(session, subject="user-1", tenant_id=TENANT_A)
+        resolve_active_membership(session, issuer=OIDC_ISSUER, subject="user-1", tenant_id=TENANT_A)
 
 
 def test_suspended_membership_is_not_authorized(session: Session) -> None:
     session.add(
         TenantMembership(
             tenant_id=TENANT_A,
+            issuer=OIDC_ISSUER,
             subject="user-1",
             role="member",
             status="suspended",
@@ -103,18 +169,19 @@ def test_suspended_membership_is_not_authorized(session: Session) -> None:
     session.commit()
 
     with pytest.raises(TenantAuthorizationError):
-        resolve_active_membership(session, subject="user-1", tenant_id=TENANT_A)
+        resolve_active_membership(session, issuer=OIDC_ISSUER, subject="user-1", tenant_id=TENANT_A)
 
 
 def test_missing_membership_is_not_authorized(session: Session) -> None:
     with pytest.raises(TenantAuthorizationError):
-        resolve_active_membership(session, subject="unknown", tenant_id=TENANT_A)
+        resolve_active_membership(session, issuer=OIDC_ISSUER, subject="unknown", tenant_id=TENANT_A)
 
 
 def test_tenant_context_endpoint_returns_database_role(session: Session) -> None:
     session.add(
         TenantMembership(
             tenant_id=TENANT_A,
+            issuer=OIDC_ISSUER,
             subject="user-1",
             role="admin",
             status="active",
@@ -159,13 +226,14 @@ def test_tenant_permission_dependency_uses_database_role(session: Session) -> No
     session.add(
         TenantMembership(
             tenant_id=TENANT_A,
+            issuer=OIDC_ISSUER,
             subject="user-1",
             role="viewer",
             status="active",
         )
     )
     session.commit()
-    membership = resolve_active_membership(session, subject="user-1", tenant_id=TENANT_A)
+    membership = resolve_active_membership(session, issuer=OIDC_ISSUER, subject="user-1", tenant_id=TENANT_A)
 
     dependency = require_tenant_permissions("notebooks:write")
     with pytest.raises(HTTPException) as error:
@@ -177,13 +245,14 @@ def test_tenant_permission_dependency_allows_owner(session: Session) -> None:
     session.add(
         TenantMembership(
             tenant_id=TENANT_A,
+            issuer=OIDC_ISSUER,
             subject="user-1",
             role="owner",
             status="active",
         )
     )
     session.commit()
-    membership = resolve_active_membership(session, subject="user-1", tenant_id=TENANT_A)
+    membership = resolve_active_membership(session, issuer=OIDC_ISSUER, subject="user-1", tenant_id=TENANT_A)
 
     dependency = require_tenant_permissions("members:manage", "providers:manage")
     assert dependency(membership) is membership
