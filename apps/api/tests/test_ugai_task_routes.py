@@ -3,9 +3,9 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi.testclient import TestClient
+from fastapi import FastAPI
 from fastapi.security import HTTPAuthorizationCredentials
-from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from ai_notebook_api.db.models import TenantMembership
 from ai_notebook_api.main import app
@@ -171,9 +171,7 @@ def test_read_and_cancel_routes_use_separate_authorized_ugai_operations(notebook
 
 
 def test_missing_ugai_client_fails_closed(notebook_api):
-    client, _ugai, _tenant_id = notebook_api
-    from fastapi import FastAPI
-    from fastapi.testclient import TestClient as Client
+    _client, _ugai, _tenant_id = notebook_api
     from ai_notebook_api.api.tasks import router
 
     isolated = FastAPI()
@@ -181,8 +179,7 @@ def test_missing_ugai_client_fails_closed(notebook_api):
     isolated.dependency_overrides[get_current_principal] = app.dependency_overrides[get_current_principal]
     isolated.dependency_overrides[bearer_scheme] = app.dependency_overrides[bearer_scheme]
     isolated.dependency_overrides[require_agents_run] = app.dependency_overrides[require_agents_run]
-    isolated.dependency_overrides[get_ugai_task_client] = lambda: None
-    with Client(isolated) as isolated_client:
+    with TestClient(isolated) as isolated_client:
         response = isolated_client.post(
             "/api/v1/tasks",
             headers={"Idempotency-Key": str(uuid4())},
