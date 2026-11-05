@@ -106,8 +106,8 @@ async def read_notebook_task(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
     ],
+    client: Annotated[UGAITaskClient, Depends(get_ugai_task_client)],
     request_id: Annotated[UUID | None, Header(alias="X-Request-ID")] = None,
-    client: Annotated[UGAITaskClient, Depends(get_ugai_task_client)] = None,
 ):
     """Read task status only for users with active notebook-read permission."""
     if membership.tenant_id != principal.tenant_id:
@@ -133,8 +133,8 @@ async def cancel_notebook_task(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
     ],
-    request_id: Annotated[UUID, Header(alias="X-Request-ID")] = uuid4(),
-    client: Annotated[UGAITaskClient, Depends(get_ugai_task_client)] = None,
+    client: Annotated[UGAITaskClient, Depends(get_ugai_task_client)],
+    request_id: Annotated[UUID | None, Header(alias="X-Request-ID")] = None,
 ):
     """Cancel only through UGAI's versioned, idempotent cancellation contract."""
     if membership.tenant_id != principal.tenant_id:
