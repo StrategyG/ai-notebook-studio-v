@@ -7,14 +7,14 @@ from fastapi import FastAPI
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 
-from ai_notebook_api.db.models import TenantMembership
-from ai_notebook_api.main import app
-from ai_notebook_api.security.auth import Principal, bearer_scheme, get_current_principal
 from ai_notebook_api.api.tasks import (
     get_ugai_task_client,
     require_agents_run,
     require_notebooks_read,
 )
+from ai_notebook_api.db.models import TenantMembership
+from ai_notebook_api.main import app
+from ai_notebook_api.security.auth import Principal, bearer_scheme, get_current_principal
 from ai_notebook_api.services.ugai_client import TaskReceipt, TaskStateCode, TaskStatus
 
 
