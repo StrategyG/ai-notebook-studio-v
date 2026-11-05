@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 SUPPORTED_JWT_ALGORITHMS = frozenset({"RS256", "ES256"})
 
@@ -31,7 +31,7 @@ class Settings:
             dict.fromkeys(item.strip().upper() for item in raw_algorithms.split(",") if item.strip())
         )
         return cls(
-            app_env=os.getenv("APP_ENV", "development").lower(),
+            app_env=os.getenv("APP_ENV", "development").strip().lower(),
             database_url=os.getenv("DATABASE_URL") or None,
             auth_jwks_url=os.getenv("AUTH_JWKS_URL") or None,
             auth_issuer=os.getenv("AUTH_ISSUER") or None,
@@ -71,12 +71,31 @@ class Settings:
     def persistence_configured(self) -> bool:
         if not self.database_url:
             return False
-        parsed = urlparse(self.database_url)
+        try:
+            parsed = urlparse(self.database_url)
+        except ValueError:
+            return False
         return (
             parsed.scheme
             in {"postgres", "postgresql", "postgresql+psycopg"}
             and bool(parsed.netloc)
         )
+
+    @property
+    def database_tls_verified(self) -> bool:
+        """Return true only when PostgreSQL verifies its CA and server hostname.
+
+        sslmode=require encrypts transport but does not authenticate the server
+        hostname. Production readiness therefore requires libpq's verify-full.
+        """
+        if not self.persistence_configured or not self.database_url:
+            return False
+        try:
+            query = parse_qs(urlparse(self.database_url).query, keep_blank_values=True)
+        except ValueError:
+            return False
+        modes = query.get("sslmode", [])
+        return len(modes) == 1 and modes[0].strip().lower() == "verify-full"
 
 
 @lru_cache(maxsize=1)
