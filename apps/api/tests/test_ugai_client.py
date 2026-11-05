@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from urllib.parse import parse_qs
 from uuid import uuid4
 
 import httpx
@@ -67,10 +68,12 @@ async def test_token_exchange_uses_rfc8693_and_never_returns_user_token():
 
     async def handler(request: httpx.Request) -> httpx.Response:
         seen["auth"] = request.headers.get("authorization")
-        seen["form"] = dict(
-            item.split("=", 1)
-            for item in request.content.decode().split("&")
-        )
+        seen["form"] = {
+            key: values[0]
+            for key, values in parse_qs(
+                request.content.decode("ascii"), keep_blank_values=True
+            ).items()
+        }
         return httpx.Response(
             200,
             json={
