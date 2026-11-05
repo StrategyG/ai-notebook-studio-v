@@ -75,10 +75,10 @@ async def submit_notebook_task(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
     ],
+    client: Annotated[UGAITaskClient, Depends(get_ugai_task_client)],
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
     request_id: Annotated[UUID | None, Header(alias="X-Request-ID")] = None,
     correlation_id: Annotated[UUID | None, Header(alias="X-Correlation-ID")] = None,
-    client: Annotated[UGAITaskClient, Depends(get_ugai_task_client)],
 ):
     """Submit one task after active membership and agents:run permission checks."""
     if membership.tenant_id != principal.tenant_id:
