@@ -70,20 +70,20 @@ def _map_ugai_error(exc: Exception) -> HTTPException:
 @router.post("/tasks", response_model=TaskReceipt, status_code=status.HTTP_202_ACCEPTED)
 async def submit_notebook_task(
     submission: TaskSubmission,
-    request: Request,
     principal: Annotated[Principal, Depends(get_current_principal)],
     membership: Annotated[TenantMembership, Depends(require_agents_run)],
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
     ],
     idempotency_key: Annotated[UUID, Header(alias="Idempotency-Key")],
-    request_id: Annotated[UUID, Header(alias="X-Request-ID")] = uuid4(),
+    request_id: Annotated[UUID | None, Header(alias="X-Request-ID")] = None,
     correlation_id: Annotated[UUID | None, Header(alias="X-Correlation-ID")] = None,
-    client: Annotated[UGAITaskClient, Depends(get_ugai_task_client)] = None,
+    client: Annotated[UGAITaskClient, Depends(get_ugai_task_client)],
 ):
     """Submit one task after active membership and agents:run permission checks."""
     if membership.tenant_id != principal.tenant_id:
         raise HTTPException(status_code=403, detail="Tenant membership mismatch")
+    request_id = request_id or uuid4()
     try:
         return await client.submit_task(
             submission,
@@ -106,12 +106,13 @@ async def read_notebook_task(
     credentials: Annotated[
         HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
     ],
-    request_id: Annotated[UUID, Header(alias="X-Request-ID")] = uuid4(),
+    request_id: Annotated[UUID | None, Header(alias="X-Request-ID")] = None,
     client: Annotated[UGAITaskClient, Depends(get_ugai_task_client)] = None,
 ):
     """Read task status only for users with active notebook-read permission."""
     if membership.tenant_id != principal.tenant_id:
         raise HTTPException(status_code=403, detail="Tenant membership mismatch")
+    request_id = request_id or uuid4()
     try:
         return await client.get_task(
             task_id,
@@ -138,6 +139,7 @@ async def cancel_notebook_task(
     """Cancel only through UGAI's versioned, idempotent cancellation contract."""
     if membership.tenant_id != principal.tenant_id:
         raise HTTPException(status_code=403, detail="Tenant membership mismatch")
+    request_id = request_id or uuid4()
     try:
         return await client.cancel_task(
             task_id,
