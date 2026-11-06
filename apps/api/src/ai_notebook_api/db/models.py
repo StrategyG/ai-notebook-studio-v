@@ -132,7 +132,8 @@ class RAGDocument(Base):
             "tenant_id",
             "source_uri",
             "content_sha256",
-            name="uq_rag_documents_tenant_source_hash",
+            "embedding_model",
+            name="uq_rag_documents_tenant_source_hash_model",
         ),
         UniqueConstraint("id", "tenant_id", name="uq_rag_documents_id_tenant"),
         Index("ix_rag_documents_tenant_created", "tenant_id", "created_at"),
@@ -143,6 +144,7 @@ class RAGDocument(Base):
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     source_uri: Mapped[str] = mapped_column(String(2048), nullable=False)
     source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    embedding_model: Mapped[str] = mapped_column(String(128), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     document_metadata: Mapped[dict[str, Any]] = mapped_column(
