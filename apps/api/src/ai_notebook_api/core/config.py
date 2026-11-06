@@ -121,6 +121,9 @@ class Settings:
             and not endpoint.username
             and not endpoint.password
             and not endpoint.fragment
+            and isinstance(self.embedding_model, str)
+            and bool(self.embedding_model.strip())
+            and len(self.embedding_model) <= 128
             and self.embedding_dimensions == RAG_EMBEDDING_DIMENSIONS
             and 1 <= self.embedding_timeout_seconds <= 120
         )
