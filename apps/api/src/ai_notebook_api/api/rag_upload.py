@@ -29,7 +29,7 @@ async def upload_document(
     membership: Annotated[TenantMembership, Depends(require_documents_write)],
     session: Annotated[Session, Depends(get_tenant_session)],
     settings: Annotated[Settings, Depends(get_settings)],
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File()],
 ) -> dict[str, Any]:
     if not settings.rag_enabled or not settings.embedding_configured:
         raise HTTPException(
