@@ -2,7 +2,12 @@ from uuid import uuid4
 
 import pytest
 
-from ai_notebook_api.rag.service import RAGService, _json_object, _vector_literal, validate_source_uri
+from ai_notebook_api.rag.service import (
+    RAGService,
+    _json_object,
+    _vector_literal,
+    validate_source_uri,
+)
 
 
 def test_metadata_filter_and_metadata_values_are_bounded_json_objects() -> None:
