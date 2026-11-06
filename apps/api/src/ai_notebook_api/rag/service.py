@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
@@ -21,7 +22,15 @@ def _sha256(value: str) -> str:
 def _vector_literal(vector: list[float], *, dimensions: int) -> str:
     if len(vector) != dimensions:
         raise ValueError("embedding dimension does not match the database schema")
-    return "[" + ",".join(format(float(value), ".9g") for value in vector) + "]"
+    values: list[str] = []
+    for value in vector:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("embedding vector contains a non-numeric value")
+        numeric = float(value)
+        if not math.isfinite(numeric):
+            raise ValueError("embedding vector contains a non-finite value")
+        values.append(format(numeric, ".9g"))
+    return "[" + ",".join(values) + "]"
 
 
 def _json_object(value: dict[str, Any] | None, *, maximum_bytes: int = 16_384) -> str:
@@ -92,9 +101,18 @@ class RAGService:
             raise ValueError("embedding_model must contain between 1 and 128 characters")
         source_uri = validate_source_uri(source_uri)
         metadata_json = _json_object(metadata)
-        apply_tenant_database_context(self.session, str(self.tenant_id))
-
         source_hash = _sha256(content)
+        chunks = chunk_text(content)
+        # Do not hold a database transaction/connection while waiting for a remote
+        # embedding provider. Embeddings are generated before tenant-scoped writes.
+        vectors = await embedder.embed([chunk.text for chunk in chunks])
+        if len(vectors) != len(chunks):
+            raise ValueError("embedding provider did not return one vector per chunk")
+        vector_values = [
+            _vector_literal(vector, dimensions=embedding_dimensions) for vector in vectors
+        ]
+
+        apply_tenant_database_context(self.session, str(self.tenant_id))
         existing = self.session.execute(
             text(
                 "SELECT id, (SELECT count(*) FROM rag_document_chunks c "
@@ -119,11 +137,6 @@ class RAGService:
                 "reused": True,
             }
 
-        chunks = chunk_text(content)
-        vectors = await embedder.embed([chunk.text for chunk in chunks])
-        if len(vectors) != len(chunks):
-            raise ValueError("embedding provider did not return one vector per chunk")
-
         document_id = uuid4()
         self.session.execute(
             text(
@@ -146,7 +159,7 @@ class RAGService:
             },
         )
 
-        for chunk, vector in zip(chunks, vectors, strict=True):
+        for chunk, vector_literal in zip(chunks, vector_values, strict=True):
             self.session.execute(
                 text(
                     "INSERT INTO rag_document_chunks "
@@ -163,7 +176,7 @@ class RAGService:
                     "start_char": chunk.start_char,
                     "end_char": chunk.end_char,
                     "content_sha256": _sha256(chunk.text),
-                    "embedding": _vector_literal(vector, dimensions=embedding_dimensions),
+                    "embedding": vector_literal,
                 },
             )
 
@@ -192,12 +205,12 @@ class RAGService:
         if not embedding_model or len(embedding_model) > 128:
             raise ValueError("embedding_model must contain between 1 and 128 characters")
         metadata_json = _json_object(metadata_filter, maximum_bytes=4096)
-        apply_tenant_database_context(self.session, str(self.tenant_id))
-
         vectors = await embedder.embed([query.strip()])
         if len(vectors) != 1:
             raise ValueError("embedding provider did not return one query vector")
         embedding = _vector_literal(vectors[0], dimensions=embedding_dimensions)
+        # Acquire the tenant-scoped database transaction only after remote inference.
+        apply_tenant_database_context(self.session, str(self.tenant_id))
         candidate_limit = min(max(limit * 4, 20), 100)
 
         statement = text(
