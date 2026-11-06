@@ -1,0 +1,244 @@
+{
+  "version": "rag-retrieval-v1",
+  "description": "Golden retrieval set for staging. It must be evaluated with the configured real embedding provider and PostgreSQL RLS runtime role; unit-test embeddings are not accepted as a release result.",
+  "thresholds": {
+    "recall_at_5": 0.9,
+    "mrr_at_10": 0.8,
+    "ndcg_at_10": 0.8
+  },
+  "documents": [
+    {
+      "id": "identity",
+      "title": "JWT and OIDC identity verification",
+      "source_uri": "urn:rag-eval:v1:identity",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "security",
+        "topic": "authentication"
+      },
+      "content": "The API verifies JSON Web Tokens using the configured OpenID Connect issuer and its JWKS signing keys. Signature, allowed algorithm, issuer, audience, expiry, subject, and tenant UUID are validated before a principal is created. The bearer token is never returned to the browser."
+    },
+    {
+      "id": "tenant-rls",
+      "title": "Tenant isolation and row-level security",
+      "source_uri": "urn:rag-eval:v1:tenant-rls",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "security",
+        "topic": "tenant-isolation"
+      },
+      "content": "PostgreSQL Row Level Security protects every tenant-owned document and chunk. The API sets app.tenant_id transaction-locally from the verified active membership. RLS policies enforce both USING and WITH CHECK, while composite foreign keys prevent a chunk from referencing a document in another tenant. Runtime database roles must not be superusers or have BYPASSRLS."
+    },
+    {
+      "id": "vectors",
+      "title": "Vector embeddings and semantic retrieval",
+      "source_uri": "urn:rag-eval:v1:vectors",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "retrieval",
+        "topic": "embeddings"
+      },
+      "content": "Each document chunk is converted into a dense numerical embedding by the configured embedding model. PostgreSQL pgvector stores 1536-dimensional vectors and uses cosine distance with an HNSW index to find semantically similar passages even when the query uses different wording."
+    },
+    {
+      "id": "hybrid",
+      "title": "Hybrid search and reciprocal rank fusion",
+      "source_uri": "urn:rag-eval:v1:hybrid",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "retrieval",
+        "topic": "ranking"
+      },
+      "content": "Hybrid retrieval runs vector similarity and PostgreSQL full-text search independently. Reciprocal Rank Fusion combines their candidate rankings using the reciprocal of sixty plus each rank, so semantic matches and exact lexical matches can both contribute to the final order."
+    },
+    {
+      "id": "metadata",
+      "title": "Metadata filtering",
+      "source_uri": "urn:rag-eval:v1:metadata",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "retrieval",
+        "topic": "filtering",
+        "department": "finance"
+      },
+      "content": "A retrieval request can include structured metadata filters such as department, classification, project, document type, or year. PostgreSQL JSONB containment applies the filter inside both vector and lexical candidate queries, before rank fusion, so out-of-scope records cannot enter the result set."
+    },
+    {
+      "id": "citations",
+      "title": "Citation provenance and source verification",
+      "source_uri": "urn:rag-eval:v1:citations",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "governance",
+        "topic": "provenance"
+      },
+      "content": "Every retrieved passage carries a citation with its document identifier, chunk identifier, source URI, source SHA-256, chunk SHA-256, and exact character offsets. A verification endpoint reloads the source, recomputes both hashes, and confirms that the original source substring equals the cited excerpt."
+    },
+    {
+      "id": "ingestion",
+      "title": "Document upload and ingestion",
+      "source_uri": "urn:rag-eval:v1:ingestion",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "documents",
+        "topic": "upload"
+      },
+      "content": "Document ingestion accepts bounded PDF, DOCX, HTML, Markdown, and UTF-8 text files. The loader extracts text without executing embedded content or fetching external URLs, records the uploaded file hash and parser provenance, and sends the extracted text through chunking and embedding before it is committed to PostgreSQL."
+    },
+    {
+      "id": "chunking",
+      "title": "Chunking and source offsets",
+      "source_uri": "urn:rag-eval:v1:chunking",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "documents",
+        "topic": "chunking"
+      },
+      "content": "The chunker splits long text into deterministic overlapping passages and prefers paragraph or sentence boundaries when available. Each chunk stores its ordinal, start character, end character, and SHA-256 hash, allowing a citation to be traced back to an exact substring of the extracted document."
+    },
+    {
+      "id": "mcp",
+      "title": "MCP authentication and tool allowlisting",
+      "source_uri": "urn:rag-eval:v1:mcp",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "security",
+        "topic": "mcp"
+      },
+      "content": "The MCP Streamable HTTP endpoint verifies bearer access tokens using the same trusted JWT and JWKS configuration as the API. It exposes only the allowlisted read-only tools rag_search and rag_get_document. Each tool resolves issuer-scoped tenant membership from PostgreSQL and checks both database role permissions and the required token scope."
+    },
+    {
+      "id": "evaluation",
+      "title": "Retrieval quality evaluation",
+      "source_uri": "urn:rag-eval:v1:evaluation",
+      "source_type": "manual",
+      "metadata": {
+        "domain": "quality",
+        "topic": "evaluation"
+      },
+      "content": "Retrieval quality is measured against a versioned golden dataset containing natural-language queries and expected source documents. Recall at five measures relevant-source coverage, Mean Reciprocal Rank at ten measures the first relevant result position, and Normalized Discounted Cumulative Gain at ten measures ranking quality. The release gate requires explicit thresholds to pass on a real embedding provider and PostgreSQL environment."
+    }
+  ],
+  "queries": [
+    {
+      "id": "q-identity",
+      "query": "How are signed user tokens checked before a request is trusted?",
+      "expected_document_ids": [
+        "identity"
+      ],
+      "metadata_filter": {
+        "domain": "security"
+      }
+    },
+    {
+      "id": "q-tenant-rls",
+      "query": "What prevents one organization from reading or writing another organization's private records?",
+      "expected_document_ids": [
+        "tenant-rls"
+      ],
+      "metadata_filter": {
+        "topic": "tenant-isolation"
+      }
+    },
+    {
+      "id": "q-vectors",
+      "query": "How can the database find passages that mean the same thing as a question even when the exact words differ?",
+      "expected_document_ids": [
+        "vectors"
+      ],
+      "metadata_filter": {
+        "topic": "embeddings"
+      }
+    },
+    {
+      "id": "q-hybrid",
+      "query": "How are semantic nearest neighbors and keyword matches combined into one ranked result?",
+      "expected_document_ids": [
+        "hybrid"
+      ],
+      "metadata_filter": {
+        "topic": "ranking"
+      }
+    },
+    {
+      "id": "q-metadata",
+      "query": "Can I limit search to finance department documents before ranking the passages?",
+      "expected_document_ids": [
+        "metadata"
+      ],
+      "metadata_filter": {
+        "department": "finance"
+      }
+    },
+    {
+      "id": "q-citations",
+      "query": "How can an auditor prove that a quoted passage really came from the original source file?",
+      "expected_document_ids": [
+        "citations"
+      ],
+      "metadata_filter": {
+        "topic": "provenance"
+      }
+    },
+    {
+      "id": "q-ingestion",
+      "query": "Which uploaded file formats can be parsed and indexed without executing their contents?",
+      "expected_document_ids": [
+        "ingestion"
+      ],
+      "metadata_filter": {
+        "topic": "upload"
+      }
+    },
+    {
+      "id": "q-chunking",
+      "query": "How does each text passage retain its original position for later citation checking?",
+      "expected_document_ids": [
+        "chunking"
+      ],
+      "metadata_filter": {
+        "topic": "chunking"
+      }
+    },
+    {
+      "id": "q-mcp",
+      "query": "Which remote context tools can an authenticated assistant call and how is access restricted?",
+      "expected_document_ids": [
+        "mcp"
+      ],
+      "metadata_filter": {
+        "topic": "mcp"
+      }
+    },
+    {
+      "id": "q-evaluation",
+      "query": "Which ranking metrics show whether relevant documents appear near the top of search results?",
+      "expected_document_ids": [
+        "evaluation"
+      ],
+      "metadata_filter": {
+        "topic": "evaluation"
+      }
+    },
+    {
+      "id": "q-jwks",
+      "query": "Where does the service obtain the public keys used to verify access-token signatures?",
+      "expected_document_ids": [
+        "identity"
+      ],
+      "metadata_filter": {
+        "domain": "security"
+      }
+    },
+    {
+      "id": "q-rank-fusion",
+      "query": "What ranking formula merges keyword retrieval with dense vector retrieval?",
+      "expected_document_ids": [
+        "hybrid"
+      ],
+      "metadata_filter": {
+        "domain": "retrieval"
+      }
+    }
+  ]
+}
