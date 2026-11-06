@@ -42,7 +42,7 @@ def session() -> Generator[Session, None, None]:
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
-    with Session(engine) as value:
+    with Session(engine, expire_on_commit=False) as value:
         yield value
     engine.dispose()
 
