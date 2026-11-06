@@ -19,10 +19,10 @@ def liveness() -> dict[str, str]:
     return {"status": "alive"}
 
 
-def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool]:
+def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool, bool]:
     """Check connectivity, schema, non-bypass runtime role, and tenant RLS policies."""
     if not settings.persistence_configured or not settings.database_url:
-        return False, False, False, False
+        return False, False, False, False, False
     try:
         engine = get_engine(settings.database_url)
         with engine.connect() as connection:
@@ -84,6 +84,60 @@ def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool]:
                 and not bool(runtime_role_owns_tenant_tables)
             )
 
+            required_privileges_present = connection.execute(
+                text(
+                    """
+                    SELECT
+                        COALESCE(
+                            has_table_privilege(
+                                current_user,
+                                to_regclass('tenant_memberships'),
+                                'SELECT'
+                            ),
+                            false
+                        )
+                        AND (
+                            NOT :rag_enabled
+                            OR (
+                                COALESCE(
+                                    has_table_privilege(
+                                        current_user,
+                                        to_regclass('rag_documents'),
+                                        'SELECT'
+                                    ),
+                                    false
+                                )
+                                AND COALESCE(
+                                    has_table_privilege(
+                                        current_user,
+                                        to_regclass('rag_documents'),
+                                        'INSERT'
+                                    ),
+                                    false
+                                )
+                                AND COALESCE(
+                                    has_table_privilege(
+                                        current_user,
+                                        to_regclass('rag_document_chunks'),
+                                        'SELECT'
+                                    ),
+                                    false
+                                )
+                                AND COALESCE(
+                                    has_table_privilege(
+                                        current_user,
+                                        to_regclass('rag_document_chunks'),
+                                        'INSERT'
+                                    ),
+                                    false
+                                )
+                            )
+                        )
+                    """
+                ),
+                {"rag_enabled": settings.rag_enabled},
+            ).scalar_one()
+
             rag_rls_enforced = True
             if settings.rag_enabled:
                 vector_extension_present = connection.execute(
@@ -144,7 +198,7 @@ def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool]:
                 ).scalar_one()
                 rag_rls_enforced = bool(protected_tables) and bool(required_indexes)
 
-        return True, bool(schema_present), bool(runtime_role_safe), bool(rag_rls_enforced)
+        return (\n            True,\n            bool(schema_present),\n            bool(runtime_role_safe),\n            bool(rag_rls_enforced),\n            bool(required_privileges_present),\n        )
     except Exception:
         return False, False, False, False
 
@@ -161,7 +215,7 @@ def readiness(
         "persistence_configured": settings.persistence_configured,
         "database_reachable": database_reachable,
         "required_schema_present": required_schema_present,
-        "database_role_not_bypass_rls": runtime_role_safe,
+        "database_role_not_bypass_rls": runtime_role_safe,\n        "database_required_privileges_present": required_privileges_present,
         "rag_rls_enforced": not settings.rag_enabled or rag_rls_enforced,
         "authentication_configured": settings.auth_configured,
         "jwks_reachable": jwks_reachable,
@@ -176,7 +230,7 @@ def readiness(
         "checks": checks,
         "note": (
             "Readiness checks database connectivity, required schema, a non-superuser/non-BYPASSRLS "
-            "runtime role, forced tenant RLS and required RAG indexes when enabled, JWKS reachability, "
+            "runtime role, required tenant/RAG table privileges, forced tenant RLS and required RAG indexes when enabled, JWKS reachability, "
             "and enabled RAG/MCP configuration. It does not replace live token acceptance, cross-tenant "
             "integration tests, retrieval evaluation, or full production acceptance."
         ),
