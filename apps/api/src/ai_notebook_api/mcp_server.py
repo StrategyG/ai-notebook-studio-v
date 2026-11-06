@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID
 
 from mcp.server.auth.middleware.auth_context import get_access_token
@@ -23,6 +23,14 @@ from ai_notebook_api.security.tenant import (
 )
 
 MCP_ALLOWED_TOOLS = frozenset({"rag_search", "rag_get_document"})
+
+def _register_allowlisted_tool(server: MCPServer, handler: Callable[..., Any]) -> None:
+    """Register a server handler only when its public tool name is explicitly allowlisted."""
+    tool_name = handler.__name__
+    if tool_name not in MCP_ALLOWED_TOOLS:
+        raise RuntimeError(f"MCP tool is not allowlisted: {tool_name}")
+    server.tool()(handler)
+
 
 
 class JWTTokenVerifier(TokenVerifier):
@@ -122,7 +130,6 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
         ),
     )
 
-    @server.tool()
     async def rag_search(
         query: str,
         limit: int = 5,
@@ -153,7 +160,6 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
         finally:
             session.close()
 
-    @server.tool()
     async def rag_get_document(document_id: str) -> dict[str, Any]:
         """Read a document source and its SHA-256 provenance within the authenticated tenant."""
         if not settings.rag_enabled:
@@ -179,6 +185,9 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
             return document
         finally:
             session.close()
+
+    _register_allowlisted_tool(server, rag_search)
+    _register_allowlisted_tool(server, rag_get_document)
 
     transport_security = TransportSecuritySettings(
         allowed_hosts=list(settings.mcp_allowed_hosts),
