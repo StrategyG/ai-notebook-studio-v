@@ -128,5 +128,5 @@ A failed metric exits non-zero. The small pinned dataset is a regression baselin
 ## Readiness and release boundary
 
 - `/health/live` reports process liveness.
-- `/health/ready` checks database connectivity, required schema, OIDC/JWKS reachability, and enabled RAG/MCP configuration. It does not replace live retrieval evaluation or tenant-isolation tests.
+- `/health/ready` checks database connectivity/schema, non-superuser non-`BYPASSRLS` non-owner runtime role, required tenant/RAG table and vector-type grants, forced RLS policies, pgvector >= 0.8.0, metadata/full-text/HNSW indexes, OIDC/JWKS reachability, and enabled RAG/MCP configuration. It does not replace live retrieval evaluation or tenant-isolation tests.
 - The full release decision remains NO-GO until all acceptance-plan items, including live staging retrieval, public MCP interoperability, cross-tenant negative tests, and production operational controls, have verified evidence.
