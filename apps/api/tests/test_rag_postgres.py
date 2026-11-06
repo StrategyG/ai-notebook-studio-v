@@ -85,6 +85,18 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
             ).one()
             assert role.rolsuper is False
             assert role.rolbypassrls is False
+            owns_tenant_tables = session.execute(
+                text(
+                    "SELECT EXISTS ("
+                    "SELECT 1 FROM pg_class c "
+                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname = current_schema() "
+                    "AND c.relname IN ('rag_documents', 'rag_document_chunks') "
+                    "AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)"
+                    ")"
+                )
+            ).scalar_one()
+            assert owns_tenant_tables is False
 
             service = RAGService(session, tenant_id=tenant_a, actor_subject="rag-test-user")
             first = await service.ingest_document(
