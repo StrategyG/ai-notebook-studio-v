@@ -84,6 +84,7 @@ jobs:
                   "GRANT SELECT, INSERT ON audit_events TO app_runtime; "
                   "GRANT SELECT, INSERT, UPDATE ON outbox_events TO app_runtime; "
                   "GRANT SELECT, INSERT, UPDATE ON provider_credentials TO app_runtime; "
+                  "GRANT USAGE ON TYPE vector TO app_runtime; "
                   "GRANT SELECT, INSERT, UPDATE, DELETE ON rag_documents, rag_document_chunks TO app_runtime"
               )
               connection.execute(
