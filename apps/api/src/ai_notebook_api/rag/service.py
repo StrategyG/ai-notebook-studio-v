@@ -78,6 +78,7 @@ class RAGService:
         content: str,
         metadata: dict[str, Any] | None,
         source_type: str,
+        embedding_model: str,
         embedder: EmbeddingProvider,
         embedding_dimensions: int = 1536,
     ) -> dict[str, Any]:
@@ -87,6 +88,8 @@ class RAGService:
             raise ValueError("content must contain between 1 and 1000000 non-whitespace characters")
         if source_type not in {"url", "upload", "manual", "repository"}:
             raise ValueError("source_type is not supported")
+        if not embedding_model or len(embedding_model) > 128:
+            raise ValueError("embedding_model must contain between 1 and 128 characters")
         source_uri = validate_source_uri(source_uri)
         metadata_json = _json_object(metadata)
         apply_tenant_database_context(self.session, str(self.tenant_id))
@@ -98,12 +101,13 @@ class RAGService:
                 "WHERE c.document_id = d.id AND c.tenant_id = d.tenant_id) AS chunk_count "
                 "FROM rag_documents d "
                 "WHERE d.tenant_id = :tenant_id AND d.source_uri = :source_uri "
-                "AND d.content_sha256 = :source_hash"
+                "AND d.content_sha256 = :source_hash AND d.embedding_model = :embedding_model"
             ),
             {
                 "tenant_id": self.tenant_id,
                 "source_uri": source_uri,
                 "source_hash": source_hash,
+                "embedding_model": embedding_model,
             },
         ).mappings().first()
         if existing is not None:
@@ -124,8 +128,8 @@ class RAGService:
         self.session.execute(
             text(
                 "INSERT INTO rag_documents "
-                "(id, tenant_id, title, source_uri, source_type, content, content_sha256, metadata, created_by) "
-                "VALUES (:id, :tenant_id, :title, :source_uri, :source_type, :content, :content_sha256, "
+                "(id, tenant_id, title, source_uri, source_type, embedding_model, content, content_sha256, metadata, created_by) "
+                "VALUES (:id, :tenant_id, :title, :source_uri, :source_type, :embedding_model, :content, :content_sha256, "
                 "CAST(:metadata AS jsonb), :created_by)"
             ),
             {
@@ -134,6 +138,7 @@ class RAGService:
                 "title": title.strip(),
                 "source_uri": source_uri,
                 "source_type": source_type,
+                "embedding_model": embedding_model,
                 "content": content,
                 "content_sha256": source_hash,
                 "metadata": metadata_json,
@@ -175,6 +180,7 @@ class RAGService:
         *,
         query: str,
         embedder: EmbeddingProvider,
+        embedding_model: str,
         limit: int = 5,
         metadata_filter: dict[str, Any] | None = None,
         embedding_dimensions: int = 1536,
@@ -183,6 +189,8 @@ class RAGService:
             raise ValueError("query must contain between 1 and 2000 characters")
         if not 1 <= limit <= 20:
             raise ValueError("limit must be between 1 and 20")
+        if not embedding_model or len(embedding_model) > 128:
+            raise ValueError("embedding_model must contain between 1 and 128 characters")
         metadata_json = _json_object(metadata_filter, maximum_bytes=4096)
         apply_tenant_database_context(self.session, str(self.tenant_id))
 
@@ -204,6 +212,7 @@ class RAGService:
                   ON d.id = c.document_id AND d.tenant_id = c.tenant_id
                 WHERE c.tenant_id = :tenant_id
                   AND d.tenant_id = :tenant_id
+                  AND d.embedding_model = :embedding_model
                   AND d.metadata @> CAST(:metadata_filter AS jsonb)
                 ORDER BY c.embedding <=> CAST(:embedding AS vector), c.id
                 LIMIT :candidate_limit
@@ -249,6 +258,7 @@ class RAGService:
                    d.title,
                    d.source_uri,
                    d.content_sha256 AS source_sha256,
+                   d.embedding_model,
                    d.metadata,
                    fused.hybrid_score
             FROM fused
@@ -265,6 +275,7 @@ class RAGService:
             {
                 "embedding": embedding,
                 "tenant_id": self.tenant_id,
+                "embedding_model": embedding_model,
                 "metadata_filter": metadata_json,
                 "query": query.strip(),
                 "candidate_limit": candidate_limit,
@@ -282,6 +293,7 @@ class RAGService:
                 "title": row["title"],
                 "source_uri": row["source_uri"],
                 "source_sha256": row["source_sha256"],
+                "embedding_model": row["embedding_model"],
                 "chunk_sha256": row["chunk_sha256"],
                 "start_char": int(row["start_char"]),
                 "end_char": int(row["end_char"]),
@@ -304,7 +316,7 @@ class RAGService:
         apply_tenant_database_context(self.session, str(self.tenant_id))
         row = self.session.execute(
             text(
-                "SELECT id, title, source_uri, source_type, content, content_sha256, metadata, created_at "
+                "SELECT id, title, source_uri, source_type, embedding_model, content, content_sha256, metadata, created_at "
                 "FROM rag_documents WHERE id = :document_id AND tenant_id = :tenant_id"
             ),
             {"document_id": document_id, "tenant_id": self.tenant_id},
@@ -318,6 +330,7 @@ class RAGService:
             "title": row["title"],
             "source_uri": row["source_uri"],
             "source_type": row["source_type"],
+            "embedding_model": row["embedding_model"],
             "content": content,
             "content_sha256": row["content_sha256"],
             "content_hash_valid": actual_hash == row["content_sha256"],
