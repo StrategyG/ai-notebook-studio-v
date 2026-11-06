@@ -73,6 +73,7 @@ async def ingest_document(
             title=payload.title,
             source_uri=payload.source_uri,
             source_type=payload.source_type,
+            embedding_model=settings.embedding_model,
             content=payload.content,
             metadata=payload.metadata,
             embedder=OpenAICompatibleEmbeddingClient(settings),
@@ -110,6 +111,7 @@ async def search_documents(
             query=payload.query,
             limit=payload.limit,
             metadata_filter=payload.metadata_filter,
+            embedding_model=settings.embedding_model,
             embedder=OpenAICompatibleEmbeddingClient(settings),
             embedding_dimensions=settings.embedding_dimensions,
         )
