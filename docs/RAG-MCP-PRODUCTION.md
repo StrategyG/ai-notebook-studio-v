@@ -111,6 +111,7 @@ Run:
 
 ~~~bash
 cd apps/api
+APP_ENV=staging \
 RAG_ENABLED=true \
 DATABASE_URL="$RAG_EVAL_DATABASE_URL" \
 EMBEDDING_API_URL="https://embedding.example/v1/embeddings" \
