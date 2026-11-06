@@ -3,12 +3,14 @@ from uuid import UUID
 import jwt
 import pytest
 from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 
 from ai_notebook_api.core.config import Settings, get_settings
 from ai_notebook_api.main import app
 from ai_notebook_api.security import auth
 from ai_notebook_api.security.auth import (
+    MAX_BEARER_TOKEN_LENGTH,
     Principal,
     TokenVerificationError,
     require_scopes,
@@ -164,3 +166,124 @@ def test_scope_dependency_rejects_missing_scope() -> None:
     with pytest.raises(HTTPException) as error:
         dependency(principal)
     assert error.value.status_code == 403
+
+
+
+def test_verifier_rejects_oversized_bearer_tokens_before_jwks_lookup() -> None:
+    with pytest.raises(TokenVerificationError, match="size"):
+        verify_access_token("x" * (MAX_BEARER_TOKEN_LENGTH + 1), configured_settings())
+
+
+@pytest.mark.parametrize(
+    "claims,expected",
+    [
+        (
+            {
+                "iss": OIDC_ISSUER,
+                "sub": "user-123",
+                "tenant_id": TENANT_ID,
+                "roles": "admin",
+                "scope": "rag:search",
+            },
+            "roles",
+        ),
+        (
+            {
+                "iss": OIDC_ISSUER,
+                "sub": "user-123",
+                "tenant_id": TENANT_ID,
+                "roles": ["admin"],
+                "scope": ["rag:search"],
+            },
+            "scope",
+        ),
+        (
+            {
+                "iss": OIDC_ISSUER,
+                "sub": "user-123",
+                "tenant_id": "not-a-uuid",
+                "roles": ["admin"],
+                "scope": "rag:search",
+            },
+            "verification",
+        ),
+        (
+            {
+                "iss": OIDC_ISSUER,
+                "sub": "x" * 256,
+                "tenant_id": TENANT_ID,
+                "roles": ["admin"],
+                "scope": "rag:search",
+            },
+            "subject",
+        ),
+    ],
+)
+def test_verifier_rejects_malformed_claim_shapes(monkeypatch, claims, expected) -> None:
+    class FakeSigningKey:
+        key = "public-key"
+
+    class FakeJwksClient:
+        def get_signing_key_from_jwt(self, _token):
+            return FakeSigningKey()
+
+    monkeypatch.setattr(auth, "_jwks_client", lambda _url: FakeJwksClient())
+    monkeypatch.setattr(jwt, "get_unverified_header", lambda _token: {"alg": "RS256"})
+    monkeypatch.setattr(jwt, "decode", lambda *_args, **_kwargs: claims)
+
+    with pytest.raises(TokenVerificationError, match=expected):
+        verify_access_token("signed-token", configured_settings())
+
+
+def test_identity_provider_readiness_checks_jwks_keys(monkeypatch) -> None:
+    class AvailableJwks:
+        def get_signing_keys(self):
+            return [object()]
+
+    class EmptyJwks:
+        def get_signing_keys(self):
+            return []
+
+    monkeypatch.setattr(auth, "_jwks_client", lambda _url: AvailableJwks())
+    assert auth.identity_provider_ready(configured_settings()) is True
+
+    monkeypatch.setattr(auth, "_jwks_client", lambda _url: EmptyJwks())
+    assert auth.identity_provider_ready(configured_settings()) is False
+    assert auth.identity_provider_ready(Settings()) is False
+
+
+def test_current_principal_rejects_missing_or_wrong_bearer_credentials() -> None:
+    settings = configured_settings()
+
+    with pytest.raises(HTTPException) as missing:
+        auth.get_current_principal(None, settings)
+    assert missing.value.status_code == 401
+
+    wrong_scheme = HTTPAuthorizationCredentials(scheme="Basic", credentials="secret")
+    with pytest.raises(HTTPException) as invalid_scheme:
+        auth.get_current_principal(wrong_scheme, settings)
+    assert invalid_scheme.value.status_code == 401
+
+
+def test_current_principal_fails_closed_when_identity_provider_is_not_configured() -> None:
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="signed-token")
+
+    with pytest.raises(HTTPException) as error:
+        auth.get_current_principal(credentials, Settings())
+
+    assert error.value.status_code == 503
+
+
+def test_current_principal_rejects_invalid_verified_token(monkeypatch) -> None:
+    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid-token")
+    monkeypatch.setattr(
+        auth,
+        "verify_access_token",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(TokenVerificationError("invalid")),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        auth.get_current_principal(credentials, configured_settings())
+
+    assert error.value.status_code == 401
+    assert error.value.headers["WWW-Authenticate"] == "Bearer"
