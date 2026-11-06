@@ -3,6 +3,7 @@ from uuid import UUID
 import pytest
 from fastapi.testclient import TestClient
 from mcp.client import Client
+from mcp.server.auth.provider import AccessToken
 
 from ai_notebook_api.core.config import Settings
 from ai_notebook_api.main import app
@@ -11,6 +12,7 @@ from ai_notebook_api.mcp_server import (
     JWTTokenVerifier,
     _register_allowlisted_tool,
     build_mcp_server,
+    _validate_required_scopes,
 )
 from ai_notebook_api.security.auth import Principal, TokenVerificationError
 
@@ -161,3 +163,26 @@ def test_mcp_tool_registration_enforces_the_explicit_allowlist() -> None:
     assert server.registered == ["rag_search", "rag_get_document"]
     with pytest.raises(RuntimeError, match="not allowlisted"):
         _register_allowlisted_tool(server, arbitrary_shell)
+
+
+def test_mcp_tools_require_their_own_narrow_token_scopes() -> None:
+    search_token = AccessToken(
+        token="verified-search-token",
+        client_id="identity.example|user-1",
+        scopes=["mcp:tools:call", "rag:search"],
+    )
+    document_token = AccessToken(
+        token="verified-document-token",
+        client_id="identity.example|user-1",
+        scopes=["mcp:tools:call", "documents:read"],
+    )
+
+    _validate_required_scopes(search_token, {"rag:search"})
+    _validate_required_scopes(document_token, {"documents:read"})
+
+    with pytest.raises(PermissionError, match="scope"):
+        _validate_required_scopes(search_token, {"documents:read"})
+    with pytest.raises(PermissionError, match="scope"):
+        _validate_required_scopes(document_token, {"rag:search"})
+    with pytest.raises(ValueError, match="at least one"):
+        _validate_required_scopes(search_token, set())
