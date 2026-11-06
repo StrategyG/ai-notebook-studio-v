@@ -93,7 +93,7 @@ The server exposes exactly two read-only tools:
 - `rag_search(query, limit, metadata_filter)`
 - `rag_get_document(document_id)`
 
-Every tool call verifies the bearer token, required scopes, issuer-scoped active membership, and database-backed role permissions. The endpoint is stateless Streamable HTTP with JSON responses and a 1 MiB request-body limit. Host allowlisting is mandatory. When MCP is disabled, `/mcp` returns 503; invalid enabled configuration fails closed.
+Every tool call verifies the bearer token, issuer-scoped active membership, and database-backed role permissions. The token must carry `mcp:tools:call`; `rag_search` additionally requires `rag:search`, while `rag_get_document` additionally requires `documents:read`. The endpoint is stateless Streamable HTTP with JSON responses and a 1 MiB request-body limit. Host allowlisting is mandatory. When MCP is disabled, `/mcp` returns 503; invalid enabled configuration fails closed.
 
 ## Tests and retrieval evaluation
 
