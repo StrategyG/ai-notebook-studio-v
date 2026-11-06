@@ -44,6 +44,7 @@ async def test_rag_service_validates_ingestion_before_database_access() -> None:
             content="document text",
             metadata={},
             source_type="manual",
+            embedding_model="fixture-embedding-v1",
             embedder=None,
         )
     with pytest.raises(ValueError, match="source_uri"):
@@ -62,6 +63,7 @@ async def test_rag_service_validates_ingestion_before_database_access() -> None:
             content="document text",
             metadata={},
             source_type="remote-shell",
+            embedding_model="fixture-embedding-v1",
             embedder=None,
         )
 
@@ -71,12 +73,13 @@ async def test_rag_service_rejects_invalid_search_input_before_database_access()
     service = RAGService(None, tenant_id=uuid4(), actor_subject="test-actor")
 
     with pytest.raises(ValueError, match="query"):
-        await service.search(query=" ", embedder=None)
+        await service.search(query=" ", embedding_model="fixture-embedding-v1", embedder=None)
     with pytest.raises(ValueError, match="limit"):
-        await service.search(query="valid query", limit=0, embedder=None)
+        await service.search(query="valid query", embedding_model="fixture-embedding-v1", limit=0, embedder=None)
     with pytest.raises(ValueError, match="JSON object"):
         await service.search(
             query="valid query",
+            embedding_model="fixture-embedding-v1",
             metadata_filter=["not", "an", "object"],
             embedder=None,
         )
