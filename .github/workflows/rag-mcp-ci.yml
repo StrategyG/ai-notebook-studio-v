@@ -65,6 +65,8 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d ragtest -v ON_ERROR_STOP=1 -c "CREATE ROLE rag_runtime LOGIN PASSWORD 'rag_runtime' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;"
           psql -h 127.0.0.1 -U postgres -d ragtest -v ON_ERROR_STOP=1 -f migrations/0007_rag_pgvector.sql
           psql -h 127.0.0.1 -U postgres -d ragtest -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO rag_runtime; GRANT USAGE ON TYPE vector TO rag_runtime; GRANT SELECT, INSERT, UPDATE, DELETE ON rag_documents, rag_document_chunks TO rag_runtime;"
+      - name: Show Ruff import normalization
+        run: python -m ruff check --fix --diff src/ai_notebook_api/rag/document_loader.py || true
       - name: Ruff lint
         run: python -m ruff check src tests
       - name: Unit, API, MCP, and PostgreSQL RAG integration tests
