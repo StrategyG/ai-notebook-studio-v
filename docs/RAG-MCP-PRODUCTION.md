@@ -9,7 +9,7 @@ The API currently ingests **extracted UTF-8 text**. A caller sends the document 
 ## Components
 
 - PostgreSQL stores original document text, source digest, metadata, embedding model identity, chunks, offsets, and vectors.
-- pgvector uses a fixed 1536-dimensional vector profile with a cosine HNSW index.
+- pgvector >= 0.8.0 uses a fixed 1536-dimensional vector profile with a cosine HNSW index. Retrieval enables strict-order iterative scans and a bounded ef_search setting so tenant and metadata filters do not prematurely underfill approximate-nearest-neighbor candidate lists.
 - PostgreSQL GIN full-text index supports lexical candidates.
 - Hybrid retrieval combines vector and lexical ranks using Reciprocal Rank Fusion (RRF).
 - Metadata filtering uses parameterized JSONB containment and is always combined with the authenticated tenant predicate.
