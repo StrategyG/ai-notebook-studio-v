@@ -229,6 +229,7 @@ class RAGService:
                   ON d.id = c.document_id AND d.tenant_id = c.tenant_id
                 WHERE c.tenant_id = :tenant_id
                   AND d.tenant_id = :tenant_id
+                  AND d.embedding_model = :embedding_model
                   AND d.metadata @> CAST(:metadata_filter AS jsonb)
                   AND c.search_tsv @@ websearch_to_tsquery('simple', :query)
                 ORDER BY ts_rank_cd(
@@ -266,6 +267,7 @@ class RAGService:
             JOIN rag_documents d
               ON d.id = c.document_id AND d.tenant_id = c.tenant_id
             WHERE c.tenant_id = :tenant_id AND d.tenant_id = :tenant_id
+              AND d.embedding_model = :embedding_model
             ORDER BY fused.hybrid_score DESC, c.id
             LIMIT :limit
             """
@@ -342,7 +344,7 @@ class RAGService:
         apply_tenant_database_context(self.session, str(self.tenant_id))
         row = self.session.execute(
             text(
-                "SELECT d.title, d.source_uri, d.content AS source_content, "
+                "SELECT d.title, d.source_uri, d.embedding_model, d.content AS source_content, "
                 "d.content_sha256 AS source_sha256, c.id AS chunk_id, c.content AS chunk_content, "
                 "c.content_sha256 AS chunk_sha256, c.start_char, c.end_char "
                 "FROM rag_documents d JOIN rag_document_chunks c "
@@ -367,6 +369,7 @@ class RAGService:
             "chunk_id": str(row["chunk_id"]),
             "title": row["title"],
             "source_uri": row["source_uri"],
+            "embedding_model": row["embedding_model"],
             "source_sha256": row["source_sha256"],
             "chunk_sha256": row["chunk_sha256"],
             "start_char": start_char,
