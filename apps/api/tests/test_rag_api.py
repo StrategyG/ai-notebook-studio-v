@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from ai_notebook_api.api import rag as rag_api
+from ai_notebook_api.api import rag_upload as rag_upload_api
 from ai_notebook_api.core.config import Settings, get_settings
 from ai_notebook_api.db.base import Base
 from ai_notebook_api.db.models import TenantMembership
@@ -108,6 +109,8 @@ def api_client(monkeypatch) -> Generator[TestClient, None, None]:
     app.dependency_overrides[get_settings] = lambda: settings
     monkeypatch.setattr(rag_api, "RAGService", FakeRAGService)
     monkeypatch.setattr(rag_api, "OpenAICompatibleEmbeddingClient", lambda _settings: object())
+    monkeypatch.setattr(rag_upload_api, "RAGService", FakeRAGService)
+    monkeypatch.setattr(rag_upload_api, "OpenAICompatibleEmbeddingClient", lambda _settings: object())
 
     with TestClient(app) as client:
         yield client
@@ -172,3 +175,24 @@ def test_rag_routes_fail_closed_when_embedding_service_is_disabled(api_client: T
 
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "rag_embedding_service_unavailable"
+
+
+def test_supported_file_upload_is_parsed_and_indexed(api_client: TestClient) -> None:
+    response = api_client.post(
+        "/api/v1/rag/documents/upload",
+        files={"file": ("tenant-policy.md", b"# Tenant Policy\nKeep tenant data isolated.", "text/markdown")},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["indexed"] is True
+    assert response.json()["parser"] == "markdown-utf8"
+    assert len(response.json()["file_sha256"]) == 64
+
+
+def test_unsupported_file_upload_is_rejected(api_client: TestClient) -> None:
+    response = api_client.post(
+        "/api/v1/rag/documents/upload",
+        files={"file": ("payload.exe", b"not executable content", "application/octet-stream")},
+    )
+
+    assert response.status_code == 422
