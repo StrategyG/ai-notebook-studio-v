@@ -4,9 +4,11 @@ import json
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from ai_notebook_api.rag.document_loader import MAX_UPLOAD_BYTES
+
 UPLOAD_ROUTE = "/api/v1/rag/documents/upload"
 UPLOAD_REQUEST_OVERHEAD_BYTES = 64 * 1024
-DEFAULT_UPLOAD_REQUEST_LIMIT = 10 * 1024 * 1024 + UPLOAD_REQUEST_OVERHEAD_BYTES
+DEFAULT_UPLOAD_REQUEST_LIMIT = MAX_UPLOAD_BYTES + UPLOAD_REQUEST_OVERHEAD_BYTES
 
 
 class UploadBodyLimitMiddleware:
