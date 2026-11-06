@@ -106,12 +106,17 @@ def get_tenant_context(
     session: Annotated[Session, Depends(get_tenant_session)],
 ) -> TenantMembership:
     try:
-        return resolve_active_membership(
+        membership = resolve_active_membership(
             session,
             issuer=principal.issuer,
             subject=principal.subject,
             tenant_id=principal.tenant_id,
         )
+        # Release the DB transaction before endpoint code calls external services
+        # such as embeddings or UGAI. The session factory uses expire_on_commit=False;
+        # data access must re-apply the transaction-local tenant GUC.
+        session.commit()
+        return membership
     except TenantAuthorizationError as exc:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
