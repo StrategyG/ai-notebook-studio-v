@@ -104,7 +104,7 @@ def _extract_pdf(data: bytes, media_type: str) -> ExtractedDocument:
     try:
         from pypdf import PdfReader
 
-        reader = PdfReader(io.BytesIO(data), strict=True)
+        reader = PdfReader(BytesIO(data), strict=True)
         if reader.is_encrypted:
             raise DocumentParseError("Encrypted PDF documents are not accepted")
         if len(reader.pages) > MAX_PDF_PAGES:
