@@ -75,7 +75,7 @@ Enable MCP only after the API identity provider, PostgreSQL, RAG schema, embeddi
 ~~~bash
 MCP_ENABLED=true
 MCP_RESOURCE_SERVER_URL=https://api.example.com/mcp
-MCP_ALLOWED_HOSTS=api.example.com:443
+MCP_ALLOWED_HOSTS=api.example.com,api.example.com:443,api.example.com:*
 MCP_ALLOWED_ORIGINS=https://trusted-mcp-client.example
 ~~~
 
@@ -103,6 +103,7 @@ The evaluator reports:
 | Recall@5 | >= 0.90 |
 | MRR@10 | >= 0.80 |
 | NDCG@10 | >= 0.85 |
+| Citation integrity | 1.00 |
 
 A non-zero exit code means one or more targets were missed. Fixture writes are rolled back; no pre-existing tenant data is modified.
 
