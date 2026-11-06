@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 SUPPORTED_JWT_ALGORITHMS = frozenset({"RS256", "ES256"})
 RAG_EMBEDDING_DIMENSIONS = 1536
@@ -95,13 +95,30 @@ class Settings:
         )
 
     @property
+    def database_tls_verified(self) -> bool:
+        if self.app_env not in {"staging", "production"}:
+            return True
+        if not self.database_url:
+            return False
+        try:
+            parsed = urlparse(self.database_url)
+            query = parse_qs(parsed.query, keep_blank_values=True)
+        except ValueError:
+            return False
+        return query.get("sslmode") == ["verify-full"]
+
+    @property
     def persistence_configured(self) -> bool:
         if not self.database_url:
             return False
-        parsed = urlparse(self.database_url)
+        try:
+            parsed = urlparse(self.database_url)
+        except ValueError:
+            return False
         return (
             parsed.scheme in {"postgres", "postgresql", "postgresql+psycopg"}
             and bool(parsed.netloc)
+            and self.database_tls_verified
         )
 
     @property
@@ -187,6 +204,10 @@ def get_settings() -> Settings:
 def validate_rag_configuration(settings: Settings) -> None:
     if settings.rag_enabled and not settings.embedding_configured:
         raise RuntimeError("RAG_ENABLED=true requires a valid embedding provider configuration")
+    if settings.rag_enabled and not settings.persistence_configured:
+        raise RuntimeError(
+            "RAG_ENABLED=true requires PostgreSQL and sslmode=verify-full in staging/production"
+        )
     if settings.embedding_dimensions != RAG_EMBEDDING_DIMENSIONS:
         raise RuntimeError("The installed RAG schema requires 1536-dimensional embeddings")
 
