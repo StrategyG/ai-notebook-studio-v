@@ -13,7 +13,7 @@ from ai_notebook_api.security.auth import Principal, get_current_principal
 
 
 class TenantAuthorizationError(ValueError):
-    """The authenticated subject is not an active member of the requested tenant."""
+    """The authenticated issuer-scoped subject is not an active tenant member."""
 
 
 TENANT_ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
@@ -27,6 +27,10 @@ TENANT_ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
             "notebooks:write",
             "agents:run",
             "providers:manage",
+            "documents:read",
+            "documents:write",
+            "rag:search",
+            "mcp:tools:call",
         }
     ),
     "admin": frozenset(
@@ -38,21 +42,56 @@ TENANT_ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
             "notebooks:write",
             "agents:run",
             "providers:manage",
+            "documents:read",
+            "documents:write",
+            "rag:search",
+            "mcp:tools:call",
         }
     ),
-    "editor": frozenset({"tenant:read", "notebooks:read", "notebooks:write", "agents:run"}),
-    "member": frozenset({"tenant:read", "notebooks:read", "agents:run"}),
-    "viewer": frozenset({"tenant:read", "notebooks:read"}),
+    "editor": frozenset(
+        {
+            "tenant:read",
+            "notebooks:read",
+            "notebooks:write",
+            "agents:run",
+            "documents:read",
+            "documents:write",
+            "rag:search",
+            "mcp:tools:call",
+        }
+    ),
+    "member": frozenset(
+        {
+            "tenant:read",
+            "notebooks:read",
+            "agents:run",
+            "documents:read",
+            "rag:search",
+            "mcp:tools:call",
+        }
+    ),
+    "viewer": frozenset(
+        {
+            "tenant:read",
+            "notebooks:read",
+            "documents:read",
+            "rag:search",
+            "mcp:tools:call",
+        }
+    ),
 }
 
 
 def resolve_active_membership(
-    session: Session, *, subject: str, tenant_id: UUID
+    session: Session, *, issuer: str, subject: str, tenant_id: UUID
 ) -> TenantMembership:
+    if not issuer or len(issuer) > 2048 or not subject or len(subject) > 255:
+        raise TenantAuthorizationError("issuer-scoped principal identity is invalid")
     apply_tenant_database_context(session, str(tenant_id))
     membership = session.scalar(
         select(TenantMembership).where(
             TenantMembership.tenant_id == tenant_id,
+            TenantMembership.issuer == issuer,
             TenantMembership.subject == subject,
             TenantMembership.status == "active",
         )
@@ -68,7 +107,10 @@ def get_tenant_context(
 ) -> TenantMembership:
     try:
         return resolve_active_membership(
-            session, subject=principal.subject, tenant_id=principal.tenant_id
+            session,
+            issuer=principal.issuer,
+            subject=principal.subject,
+            tenant_id=principal.tenant_id,
         )
     except TenantAuthorizationError as exc:
         raise HTTPException(
