@@ -43,6 +43,7 @@ Grant only the privileges required by enabled features. For RAG retrieval and in
 
 ~~~sql
 GRANT USAGE ON SCHEMA public TO app_runtime;
+GRANT USAGE ON TYPE vector TO app_runtime;
 GRANT SELECT, INSERT ON rag_documents, rag_document_chunks TO app_runtime;
 ~~~
 
