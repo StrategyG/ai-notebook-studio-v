@@ -202,14 +202,16 @@ def get_settings() -> Settings:
 
 
 def validate_rag_configuration(settings: Settings) -> None:
-    if settings.rag_enabled and not settings.embedding_configured:
+    if not settings.rag_enabled:
+        return
+    if settings.embedding_dimensions != RAG_EMBEDDING_DIMENSIONS:
+        raise RuntimeError("The installed RAG schema requires 1536-dimensional embeddings")
+    if not settings.embedding_configured:
         raise RuntimeError("RAG_ENABLED=true requires a valid embedding provider configuration")
-    if settings.rag_enabled and not settings.persistence_configured:
+    if not settings.persistence_configured:
         raise RuntimeError(
             "RAG_ENABLED=true requires PostgreSQL and sslmode=verify-full in staging/production"
         )
-    if settings.embedding_dimensions != RAG_EMBEDDING_DIMENSIONS:
-        raise RuntimeError("The installed RAG schema requires 1536-dimensional embeddings")
 
 
 def validate_mcp_configuration(settings: Settings) -> None:
