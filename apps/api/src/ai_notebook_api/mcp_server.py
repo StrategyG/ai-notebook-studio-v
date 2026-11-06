@@ -24,6 +24,15 @@ from ai_notebook_api.security.tenant import (
 
 MCP_ALLOWED_TOOLS = frozenset({"rag_search", "rag_get_document"})
 
+
+def _validate_required_scopes(token: AccessToken, required_scopes: set[str]) -> None:
+    if not required_scopes or any(not scope or len(scope) > 128 for scope in required_scopes):
+        raise ValueError("at least one valid MCP tool scope is required")
+    granted_scopes = set(token.scopes or [])
+    if not required_scopes.issubset(granted_scopes):
+        raise PermissionError("Required MCP scope is missing")
+
+
 def _register_allowlisted_tool(server: MCPServer, handler: Callable[..., Any]) -> None:
     """Register a server handler only when its public tool name is explicitly allowlisted."""
     tool_name = handler.__name__
@@ -98,8 +107,7 @@ def _open_authorized_session(
         granted = TENANT_ROLE_PERMISSIONS.get(membership.role, frozenset())
         if not required_permissions.issubset(granted):
             raise PermissionError("Tool permission denied")
-        if not required_scopes.issubset(set(token.scopes)):
-            raise PermissionError("Required MCP scope is missing")
+        _validate_required_scopes(token, required_scopes)
         # Do not hold a database connection while a tool waits on the embedding API.
         # RAGService re-establishes app.tenant_id before its next SQL statement.
         session.commit()
