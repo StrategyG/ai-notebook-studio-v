@@ -198,24 +198,35 @@ def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool, bool]:
                 ).scalar_one()
                 rag_rls_enforced = bool(protected_tables) and bool(required_indexes)
 
-        return (\n            True,\n            bool(schema_present),\n            bool(runtime_role_safe),\n            bool(rag_rls_enforced),\n            bool(required_privileges_present),\n        )
+        return (
+            True,
+            bool(schema_present),
+            bool(runtime_role_safe),
+            bool(rag_rls_enforced),
+            bool(required_privileges_present),
+        )
     except Exception:
-        return False, False, False, False
+        return False, False, False, False, False
 
 
 @router.get("/health/ready")
 def readiness(
     response: Response, settings: Annotated[Settings, Depends(get_settings)]
 ) -> dict[str, object]:
-    database_reachable, required_schema_present, runtime_role_safe, rag_rls_enforced = (
-        _database_health(settings)
-    )
+    (
+        database_reachable,
+        required_schema_present,
+        runtime_role_safe,
+        rag_rls_enforced,
+        required_privileges_present,
+    ) = _database_health(settings)
     jwks_reachable = identity_provider_ready(settings)
     checks = {
         "persistence_configured": settings.persistence_configured,
         "database_reachable": database_reachable,
         "required_schema_present": required_schema_present,
-        "database_role_not_bypass_rls": runtime_role_safe,\n        "database_required_privileges_present": required_privileges_present,
+        "database_role_not_bypass_rls": runtime_role_safe,
+        "database_required_privileges_present": required_privileges_present,
         "rag_rls_enforced": not settings.rag_enabled or rag_rls_enforced,
         "authentication_configured": settings.auth_configured,
         "jwks_reachable": jwks_reachable,
