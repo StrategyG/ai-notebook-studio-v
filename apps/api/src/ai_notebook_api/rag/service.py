@@ -240,6 +240,9 @@ class RAGService:
         embedding = _vector_literal(vectors[0], dimensions=embedding_dimensions)
         # Acquire the tenant-scoped database transaction only after remote inference.
         apply_tenant_database_context(self.session, str(self.tenant_id))
+        if self.session.get_bind().dialect.name == "postgresql":
+            self.session.execute(text("SET LOCAL hnsw.iterative_scan = 'strict_order'"))
+            self.session.execute(text("SET LOCAL hnsw.ef_search = 100"))
         candidate_limit = min(max(limit * 4, 20), 100)
 
         statement = text(
