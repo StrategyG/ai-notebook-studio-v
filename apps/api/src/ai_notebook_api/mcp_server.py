@@ -112,9 +112,10 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
         auth=AuthSettings(
             issuer_url=AnyHttpUrl(settings.auth_issuer or ""),
             resource_server_url=AnyHttpUrl(settings.mcp_resource_server_url or ""),
-            required_scopes=[],
-            # The configured issuer uses its own audience identifier. The JWT verifier
-            # validates AUTH_AUDIENCE; resource metadata still advertises the MCP URL.
+            required_scopes=["mcp:tools:call"],
+            # The gateway requires the base tool-call scope. Each tool additionally
+            # checks its own narrow rag:search or documents:read scope in the handler.
+            # The JWT verifier validates AUTH_AUDIENCE against the configured issuer.
             validate_token_resource=False,
         ),
     )
