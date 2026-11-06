@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rag-live-evaluation-\${{ github.ref }}
+  group: rag-live-evaluation-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -23,10 +23,10 @@ jobs:
       RAG_ENABLED: "true"
       EMBEDDING_DIMENSIONS: "1536"
       EMBEDDING_TIMEOUT_SECONDS: "30"
-      DATABASE_URL: \${{ secrets.RAG_EVAL_DATABASE_URL }}
-      EMBEDDING_API_URL: \${{ secrets.EMBEDDING_API_URL }}
-      EMBEDDING_API_KEY: \${{ secrets.EMBEDDING_API_KEY }}
-      EMBEDDING_MODEL: \${{ vars.EMBEDDING_MODEL }}
+      DATABASE_URL: ${{ secrets.RAG_EVAL_DATABASE_URL }}
+      EMBEDDING_API_URL: ${{ secrets.EMBEDDING_API_URL }}
+      EMBEDDING_API_KEY: ${{ secrets.EMBEDDING_API_KEY }}
+      EMBEDDING_MODEL: ${{ vars.EMBEDDING_MODEL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
