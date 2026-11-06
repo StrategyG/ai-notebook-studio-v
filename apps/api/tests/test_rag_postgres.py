@@ -57,6 +57,7 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
                     "metadata": '{"classification":"private"}',
                 },
             )
+            chunk_b = uuid4()
             connection.execute(
                 text(
                     "INSERT INTO rag_document_chunks "
@@ -65,7 +66,7 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
                     "CAST(:embedding AS vector))"
                 ),
                 {
-                    "id": uuid4(),
+                    "id": chunk_b,
                     "tenant_id": tenant_b,
                     "document_id": document_b,
                     "content": private_content,
@@ -95,6 +96,15 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
                 metadata={"classification": "internal", "topic": "database"},
                 embedder=FixedEmbeddingProvider(),
             )
+            second_tenant_a = await service.ingest_document(
+                title="Tenant A security policy",
+                source_uri=f"urn:rag-test:tenant-a-security:{tenant_a}",
+                source_type="manual",
+                content="Tenant A security policy describes access control and identity protection.",
+                metadata={"classification": "internal", "topic": "security"},
+                embedding_model="fixture-embedding-v1",
+                embedder=FixedEmbeddingProvider(),
+            )
             session.commit()
 
             repeated = await service.ingest_document(
@@ -121,6 +131,18 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
             assert {item["document_id"] for item in response["results"]} == {
                 first["document_id"]
             }
+            filtered_security = await service.search(
+                query="security policy access control",
+                embedding_model="fixture-embedding-v1",
+                limit=5,
+                metadata_filter={"topic": "security"},
+                embedder=FixedEmbeddingProvider(),
+            )
+            assert {item["document_id"] for item in filtered_security["results"]} == {
+                second_tenant_a["document_id"]
+            }
+            assert service.get_document(document_b) is None
+            assert service.get_chunk_source(document_b, chunk_b) is None
             citation = response["citations"][0]
             assert citation["source_sha256"] == first["content_sha256"]
 
