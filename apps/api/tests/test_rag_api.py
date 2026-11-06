@@ -7,7 +7,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from ai_notebook_api import api
 from ai_notebook_api.api import rag as rag_api
 from ai_notebook_api.core.config import Settings, get_settings
 from ai_notebook_api.db.base import Base
