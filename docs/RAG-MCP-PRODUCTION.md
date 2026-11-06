@@ -64,7 +64,7 @@ Set secrets through the deployment secret manager. Never commit values to .env, 
 
 | Variable | Required | Notes |
 |---|---:|---|
-| DATABASE_URL | Yes | PostgreSQL runtime role; must be NOSUPERUSER NOBYPASSRLS |
+| DATABASE_URL | Yes | PostgreSQL runtime role; must be NOSUPERUSER NOBYPASSRLS; staging/production require sslmode=verify-full |
 | RAG_ENABLED | Yes | true to enable RAG routes |
 | EMBEDDING_API_URL | Yes | HTTPS OpenAI-compatible /embeddings endpoint in production |
 | EMBEDDING_API_KEY | Yes | Secret-manager value; never logged |
@@ -99,7 +99,7 @@ The API runtime role must:
 - Not own the RAG tables.
 - Have only the table privileges required by the deployed API.
 - Use transaction-local app.tenant_id context set after identity and membership validation.
-- Connect through TLS in production and a bounded connection pool.
+- Connect with sslmode=verify-full in staging and production, and use a bounded connection pool.
 
 Do not use the migration owner, PostgreSQL superuser, or a role with BYPASSRLS as DATABASE_URL.
 
