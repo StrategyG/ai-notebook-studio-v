@@ -154,6 +154,7 @@ class Settings:
             and (
                 resource.hostname in self.mcp_allowed_hosts
                 or f"{resource.hostname}:*" in self.mcp_allowed_hosts
+                or f"{resource.hostname}:{resource.port or 443}" in self.mcp_allowed_hosts
             )
             and all(
                 origin.scheme == "https"
