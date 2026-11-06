@@ -54,6 +54,7 @@ async def test_rag_service_validates_ingestion_before_database_access() -> None:
             content="document text",
             metadata={},
             source_type="manual",
+            embedding_model="fixture-embedding-v1",
             embedder=None,
         )
     with pytest.raises(ValueError, match="source_type"):
