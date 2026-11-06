@@ -106,7 +106,13 @@ class Settings:
 
     @property
     def embedding_configured(self) -> bool:
-        if not all((self.embedding_api_url, self.embedding_api_key, self.embedding_model)):
+        if (
+            not self.embedding_api_url
+            or not self.embedding_api_key
+            or not self.embedding_api_key.strip()
+            or not self.embedding_model
+            or not self.embedding_model.strip()
+        ):
             return False
         try:
             endpoint = urlparse(self.embedding_api_url or "")
