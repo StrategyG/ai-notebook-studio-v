@@ -30,7 +30,7 @@ All routes require a verified bearer token and active tenant membership.
 | GET | /api/v1/rag/documents/{document_id} | documents:read |
 | GET | /api/v1/rag/documents/{document_id}/chunks/{chunk_id} | documents:read |
 
-The text document endpoint returns the stored source text and its recomputed hash status. The upload endpoint accepts files up to 10 MB and limits extracted text to 1 MB; PDF is capped at 500 pages, and DOCX archives are capped at 512 entries and 30 MB uncompressed. The parser does not execute embedded content, fetch external links, or write uploads to disk. It records the uploaded file SHA-256, sanitized display filename, parser, and media type. The chunk endpoint returns the source and chunk digests, offsets, excerpt, and three integrity booleans.
+The text document endpoint returns the stored source text and its recomputed hash status. The upload endpoint accepts files up to 10 MB and limits extracted text to 1 MB; PDF is capped at 500 pages, and DOCX archives are capped at 512 entries and 30 MB uncompressed. The parser does not execute embedded content, follow external links, or extract archive members to the filesystem. It records the uploaded file SHA-256, sanitized display filename, parser, and media type. The chunk endpoint returns the source and chunk digests, offsets, excerpt, and three integrity booleans.
 
 metadata_filter is a bounded JSON object and is applied as JSONB containment before ranking. It never replaces the tenant predicate.
 
@@ -106,7 +106,6 @@ The evaluator reports:
 | MRR@10 | >= 0.80 |
 | NDCG@10 | >= 0.85 |
 | Citation integrity rate | 1.00 |
-| Citation integrity | 1.00 |
 
 A non-zero exit code means one or more targets were missed. Fixture writes are rolled back; no pre-existing tenant data is modified.
 
