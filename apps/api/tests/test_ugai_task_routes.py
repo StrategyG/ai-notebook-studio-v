@@ -3,11 +3,13 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 
 from ai_notebook_api.api.tasks import (
+    _map_ugai_error,
+    _user_token,
     get_ugai_task_client,
     require_agents_run,
     require_notebooks_read,
@@ -15,7 +17,13 @@ from ai_notebook_api.api.tasks import (
 from ai_notebook_api.db.models import TenantMembership
 from ai_notebook_api.main import app
 from ai_notebook_api.security.auth import Principal, bearer_scheme, get_current_principal
-from ai_notebook_api.services.ugai_client import TaskReceipt, TaskStateCode, TaskStatus
+from ai_notebook_api.services.ugai_client import (
+    TaskReceipt,
+    TaskStateCode,
+    TaskStatus,
+    UGAIAuthenticationError,
+    UGAIUnavailable,
+)
 
 
 class FakeUGAITaskClient:
@@ -207,3 +215,68 @@ def test_membership_tenant_mismatch_is_rejected(notebook_api):
     )
     assert response.status_code == 403
     assert ugai.calls == []
+
+
+def test_task_routes_map_ugai_authentication_and_availability_errors(notebook_api):
+    client, ugai, _tenant_id = notebook_api
+
+    async def authentication_failure(*_args, **_kwargs):
+        raise UGAIAuthenticationError("private provider details")
+
+    async def availability_failure(*_args, **_kwargs):
+        raise UGAIUnavailable("private provider diagnostics")
+
+    ugai.submit_task = authentication_failure
+    response = client.post(
+        "/api/v1/tasks",
+        headers={"Idempotency-Key": str(uuid4())},
+        json=request_body(),
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "ugai_identity_exchange_failed"
+    assert "private provider details" not in response.text
+
+    ugai.get_task = availability_failure
+    task_id = UUID("a3c605dc-14c1-4649-9bfb-cc1dcd1a73b1")
+    response = client.get(f"/api/v1/tasks/{task_id}")
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "ugai_task_service_unavailable"
+    assert "private provider diagnostics" not in response.text
+
+
+def test_cancel_route_maps_ugai_unavailable_error(notebook_api):
+    client, ugai, _tenant_id = notebook_api
+
+    async def availability_failure(*_args, **_kwargs):
+        raise UGAIUnavailable("private cancellation diagnostics")
+
+    ugai.cancel_task = availability_failure
+    task_id = UUID("a3c605dc-14c1-4649-9bfb-cc1dcd1a73b1")
+    response = client.post(f"/api/v1/tasks/{task_id}/cancel")
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "ugai_task_service_unavailable"
+    assert "private cancellation diagnostics" not in response.text
+
+
+def test_task_routes_reject_missing_bearer_credentials(notebook_api):
+    client, ugai, _tenant_id = notebook_api
+    app.dependency_overrides[bearer_scheme] = lambda: None
+    response = client.post(
+        "/api/v1/tasks",
+        headers={"Idempotency-Key": str(uuid4())},
+        json=request_body(),
+    )
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert ugai.calls == []
+
+
+def test_task_helpers_return_sanitized_http_errors_and_require_bearer():
+    with pytest.raises(HTTPException) as missing:
+        _user_token(None)
+    assert missing.value.status_code == 401
+    assert _map_ugai_error(UGAIAuthenticationError("sensitive")).status_code == 502
+    assert _map_ugai_error(UGAIUnavailable("sensitive")).status_code == 503
+    assert _map_ugai_error(RuntimeError("sensitive")).detail == {
+        "code": "ugai_task_service_unavailable"
+    }
