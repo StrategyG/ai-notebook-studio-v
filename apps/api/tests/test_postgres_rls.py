@@ -81,9 +81,9 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
                     ),
                     (
                         "rag_documents",
-                        "(tenant_id, title, source_uri, source_type, content, content_sha256, "
+                        "(tenant_id, title, source_uri, source_type, embedding_model, content, content_sha256, "
                         "metadata, created_by) VALUES (:tenant_id, 'cross-tenant', "
-                        "'urn:cross-tenant:test', 'manual', 'x', repeat('a', 64), "
+                        "'urn:cross-tenant:test', 'manual', 'fixture-embedding-v1', 'x', repeat('a', 64), "
                         "'{}'::jsonb, 'user')",
                     ),
                 ):
@@ -112,8 +112,6 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
             )
             sequence = event.sequence
             session.commit()
-            # The tenant GUC is transaction-local; do not dereference an
-            # expired ORM object after commit outside the tenant context.
             assert sequence == 1
             assert verify_audit_chain(session, tenant_id=tenant_c)
     finally:
