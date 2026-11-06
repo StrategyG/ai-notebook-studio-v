@@ -11,8 +11,8 @@ from ai_notebook_api.mcp_server import (
     MCP_ALLOWED_TOOLS,
     JWTTokenVerifier,
     _register_allowlisted_tool,
-    build_mcp_server,
     _validate_required_scopes,
+    build_mcp_server,
 )
 from ai_notebook_api.security.auth import Principal, TokenVerificationError
 
