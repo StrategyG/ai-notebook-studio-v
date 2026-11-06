@@ -76,6 +76,16 @@ async def test_rag_service_validates_ingestion_before_database_access() -> None:
             embedding_model="fixture-embedding-v1",
             embedder=None,
         )
+    with pytest.raises(ValueError, match="embedding_model"):
+        await service.ingest_document(
+            title="Valid title",
+            source_uri="urn:test:1",
+            content="document text",
+            metadata={},
+            source_type="manual",
+            embedding_model="   ",
+            embedder=None,
+        )
 
 
 @pytest.mark.asyncio
@@ -86,6 +96,8 @@ async def test_rag_service_rejects_invalid_search_input_before_database_access()
         await service.search(query=" ", embedding_model="fixture-embedding-v1", embedder=None)
     with pytest.raises(ValueError, match="limit"):
         await service.search(query="valid query", embedding_model="fixture-embedding-v1", limit=0, embedder=None)
+    with pytest.raises(ValueError, match="embedding_model"):
+        await service.search(query="valid query", embedding_model="   ", embedder=None)
     with pytest.raises(ValueError, match="limit"):
         await service.search(query="valid query", embedding_model="fixture-embedding-v1", limit=True, embedder=None)
     with pytest.raises(ValueError, match="JSON object"):
