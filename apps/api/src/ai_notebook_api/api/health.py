@@ -20,7 +20,7 @@ def liveness() -> dict[str, str]:
 
 
 def _database_health(settings: Settings) -> tuple[bool, bool]:
-    """Return database connectivity and required-schema presence without leaking errors."""
+    """Check connectivity and schema needed by the enabled persistence features."""
     if not settings.persistence_configured or not settings.database_url:
         return False, False
     try:
@@ -35,7 +35,24 @@ def _database_health(settings: Settings) -> tuple[bool, bool]:
                     )
                 ).scalars()
             )
-        return True, _REQUIRED_TABLES.issubset(table_names)
+            membership_columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = current_schema() AND table_name = 'tenant_memberships'"
+                    )
+                ).scalars()
+            )
+            required_tables = set(_REQUIRED_TABLES)
+            if settings.rag_enabled:
+                required_tables.update({"rag_documents", "rag_document_chunks"})
+            schema_present = required_tables.issubset(table_names) and "issuer" in membership_columns
+            if settings.rag_enabled:
+                vector_extension_present = connection.execute(
+                    text("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')")
+                ).scalar_one()
+                schema_present = schema_present and bool(vector_extension_present)
+        return True, schema_present
     except Exception:
         return False, False
 
@@ -52,6 +69,8 @@ def readiness(
         "required_schema_present": required_schema_present,
         "authentication_configured": settings.auth_configured,
         "jwks_reachable": jwks_reachable,
+        "rag_embedding_configured": not settings.rag_enabled or settings.embedding_configured,
+        "mcp_configuration_valid": not settings.mcp_enabled or settings.mcp_configured,
     }
     ready = all(checks.values())
     if not ready:
@@ -60,8 +79,9 @@ def readiness(
         "status": "ready" if ready else "not_ready",
         "checks": checks,
         "note": (
-            "Readiness verifies database connectivity, required base tables and JWKS reachability. "
-            "It does not replace migration-version checks, live token acceptance, tenant-isolation "
-            "tests, or full production acceptance."
+            "Readiness checks database connectivity, issuer-scoped identity schema, JWKS reachability, "
+            "and the configuration/schema of enabled RAG and MCP features. It does not replace "
+            "live token acceptance, cross-tenant integration tests, retrieval evaluation, or full "
+            "production acceptance."
         ),
     }
