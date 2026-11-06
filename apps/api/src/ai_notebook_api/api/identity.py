@@ -13,6 +13,7 @@ def current_identity(
 ) -> dict[str, object]:
     """Return verified identity claims; never return the bearer token."""
     return {
+        "issuer": principal.issuer,
         "subject": principal.subject,
         "tenant_id": str(principal.tenant_id),
         "roles": sorted(principal.roles),
