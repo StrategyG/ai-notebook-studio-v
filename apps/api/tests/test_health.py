@@ -27,7 +27,7 @@ def test_readiness_does_not_claim_ready_without_auth_and_database() -> None:
 def test_readiness_rejects_non_https_identity_endpoints(monkeypatch) -> None:
     monkeypatch.setattr(
         "ai_notebook_api.api.health._database_health",
-        lambda _settings: (True, True, True, True),
+        lambda _settings: (True, True, True, True, True),
     )
     monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example:5432/app")
     monkeypatch.setenv("AUTH_JWKS_URL", "http://identity.example/.well-known/jwks.json")
@@ -54,7 +54,7 @@ def test_readiness_requires_live_database_schema_and_jwks(monkeypatch):
     monkeypatch.setenv("AUTH_AUDIENCE", "ai-notebook-api")
     monkeypatch.setattr(
         "ai_notebook_api.api.health._database_health",
-        lambda _settings: (True, True, True, True),
+        lambda _settings: (True, True, True, True, True),
     )
     monkeypatch.setattr(
         "ai_notebook_api.api.health.identity_provider_ready",
@@ -67,6 +67,7 @@ def test_readiness_requires_live_database_schema_and_jwks(monkeypatch):
     assert checks["database_reachable"] is True
     assert checks["required_schema_present"] is True
     assert checks["database_role_not_bypass_rls"] is True
+    assert checks["database_required_privileges_present"] is True
     assert checks["rag_rls_enforced"] is True
     assert checks["jwks_reachable"] is True
     get_settings.cache_clear()
@@ -79,7 +80,7 @@ def test_readiness_fails_when_database_or_jwks_is_unavailable(monkeypatch):
     monkeypatch.setenv("AUTH_AUDIENCE", "ai-notebook-api")
     monkeypatch.setattr(
         "ai_notebook_api.api.health._database_health",
-        lambda _settings: (True, False, False, False),
+        lambda _settings: (True, False, False, False, False),
     )
     monkeypatch.setattr(
         "ai_notebook_api.api.health.identity_provider_ready",
@@ -91,6 +92,7 @@ def test_readiness_fails_when_database_or_jwks_is_unavailable(monkeypatch):
     checks = response.json()["checks"]
     assert checks["required_schema_present"] is False
     assert checks["database_role_not_bypass_rls"] is False
+    assert checks["database_required_privileges_present"] is False
     assert checks["rag_rls_enforced"] is False
     assert checks["jwks_reachable"] is False
     get_settings.cache_clear()
@@ -109,7 +111,7 @@ def test_readiness_fails_when_runtime_role_bypasses_rls(monkeypatch):
     monkeypatch.setenv("AUTH_AUDIENCE", "ai-notebook-api")
     monkeypatch.setattr(
         "ai_notebook_api.api.health._database_health",
-        lambda _settings: (True, True, False, True),
+        lambda _settings: (True, True, False, True, True),
     )
     monkeypatch.setattr(
         "ai_notebook_api.api.health.identity_provider_ready",
@@ -132,7 +134,7 @@ def test_readiness_fails_when_rag_rls_or_indexes_are_missing(monkeypatch):
     monkeypatch.setenv("EMBEDDING_API_KEY", "test-key")
     monkeypatch.setattr(
         "ai_notebook_api.api.health._database_health",
-        lambda _settings: (True, True, True, False),
+        lambda _settings: (True, True, True, False, True),
     )
     monkeypatch.setattr(
         "ai_notebook_api.api.health.identity_provider_ready",
@@ -142,4 +144,24 @@ def test_readiness_fails_when_rag_rls_or_indexes_are_missing(monkeypatch):
     response = client.get("/health/ready")
     assert response.status_code == 503
     assert response.json()["checks"]["rag_rls_enforced"] is False
+    get_settings.cache_clear()
+
+
+def test_readiness_fails_when_runtime_table_privileges_are_missing(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@db.example:5432/app")
+    monkeypatch.setenv("AUTH_JWKS_URL", "https://identity.example/.well-known/jwks.json")
+    monkeypatch.setenv("AUTH_ISSUER", "https://identity.example/")
+    monkeypatch.setenv("AUTH_AUDIENCE", "ai-notebook-api")
+    monkeypatch.setattr(
+        "ai_notebook_api.api.health._database_health",
+        lambda _settings: (True, True, True, True, False),
+    )
+    monkeypatch.setattr(
+        "ai_notebook_api.api.health.identity_provider_ready",
+        lambda _settings: True,
+    )
+    get_settings.cache_clear()
+    response = client.get("/health/ready")
+    assert response.status_code == 503
+    assert response.json()["checks"]["database_required_privileges_present"] is False
     get_settings.cache_clear()
