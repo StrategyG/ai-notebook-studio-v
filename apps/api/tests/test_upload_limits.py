@@ -59,3 +59,10 @@ def test_upload_middleware_does_not_limit_other_routes() -> None:
 
     assert response.status_code == 200
     assert response.json()["received_bytes"] == 9
+
+
+
+@pytest.mark.parametrize("max_bytes", [0, -1, True, 1.5])
+def test_upload_middleware_rejects_invalid_limit_configuration(max_bytes: object) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        UploadBodyLimitMiddleware(_test_app(), max_bytes=max_bytes)
