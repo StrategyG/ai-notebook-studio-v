@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -40,7 +41,7 @@ def _ndcg_at_k(retrieved: list[str], relevant: set[str], k: int) -> float:
     if not relevant:
         return 0.0
     dcg = sum(
-        1.0 / __import__("math").log2(rank + 1)
+        1.0 / math.log2(rank + 1)
         for rank, document_id in enumerate(retrieved[:k], start=1)
         if document_id in relevant
     )
@@ -79,6 +80,7 @@ async def evaluate() -> int:
                 source_type="manual",
                 content=document["content"],
                 metadata=document["metadata"],
+                embedding_model=settings.embedding_model,
                 embedder=embedder,
                 embedding_dimensions=settings.embedding_dimensions,
             )
@@ -90,6 +92,7 @@ async def evaluate() -> int:
             relevant = {indexed[item] for item in query["relevant_document_ids"]}
             response = await service.search(
                 query=query["query"],
+                embedding_model=settings.embedding_model,
                 limit=10,
                 embedder=embedder,
                 embedding_dimensions=settings.embedding_dimensions,
