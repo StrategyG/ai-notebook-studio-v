@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import io
 import zipfile
-
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import PurePosixPath
-
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 1_000_000
