@@ -16,7 +16,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: rag-mcp-\${{ github.workflow }}-\${{ github.ref }}
+  group: rag-mcp-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -67,8 +67,22 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d ragtest -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO rag_runtime; GRANT USAGE ON TYPE vector TO rag_runtime; GRANT SELECT, INSERT, UPDATE, DELETE ON rag_documents, rag_document_chunks TO rag_runtime;"
       - name: Ruff lint
         run: python -m ruff check src tests
-      - name: Unit, API, MCP, and PostgreSQL integration tests
-        run: python -m pytest --cov=ai_notebook_api.rag --cov=ai_notebook_api.mcp_server --cov=ai_notebook_api.security --cov-report=term-missing
+      - name: Unit, API, MCP, and PostgreSQL RAG integration tests
+        run: >-
+          python -m pytest
+          --cov=ai_notebook_api.rag
+          --cov=ai_notebook_api.mcp_server
+          --cov=ai_notebook_api.security
+          --cov-report=term-missing
+          tests/test_document_loader.py
+          tests/test_mcp_security.py
+          tests/test_rag_api.py
+          tests/test_rag_chunking.py
+          tests/test_rag_embeddings.py
+          tests/test_rag_evaluation.py
+          tests/test_rag_postgres.py
+          tests/test_rag_service_validation.py
+          tests/test_tenant_authorization.py
       - name: Confirm PostgreSQL runtime role cannot bypass RLS
         env:
           PGPASSWORD: rag_runtime
