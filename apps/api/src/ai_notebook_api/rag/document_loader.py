@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import io
-import zipfile
 from dataclasses import dataclass
 from html.parser import HTMLParser
+import io
 from pathlib import PurePosixPath
+import zipfile
 
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
