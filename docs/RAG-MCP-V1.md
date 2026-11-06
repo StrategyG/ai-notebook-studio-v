@@ -2,9 +2,9 @@
 
 ## Scope
 
-This increment adds a retrieval backend, not a text-generation endpoint. It ingests text supplied by an authenticated caller, stores the original source and chunk embeddings in PostgreSQL, and returns hybrid-ranked passages with verifiable provenance. The MCP server exposes only the read-only retrieval tools listed below.
+This increment adds a retrieval backend, not a text-generation endpoint. It ingests text supplied by an authenticated caller or extracts text from bounded PDF, DOCX, HTML, Markdown, and UTF-8 TXT uploads. It stores the original extracted source and chunk embeddings in PostgreSQL, then returns hybrid-ranked passages with verifiable provenance. The MCP server exposes only the read-only retrieval tools listed below.
 
-Binary PDF, DOCX, spreadsheet, OCR, remote URL fetching, answer generation, and reranking are not part of this increment. A caller must provide extracted text and a stable source URI.
+Spreadsheet parsing, OCR, remote URL fetching, answer generation, and reranking are not part of this increment. The system never follows source links as part of ingestion.
 
 ## Data and retrieval flow
 
@@ -25,11 +25,12 @@ All routes require a verified bearer token and active tenant membership.
 | Method | Route | Tenant permission |
 |---|---|---|
 | POST | /api/v1/rag/documents | documents:write |
+| POST | /api/v1/rag/documents/upload | documents:write |
 | POST | /api/v1/rag/search | rag:search |
 | GET | /api/v1/rag/documents/{document_id} | documents:read |
 | GET | /api/v1/rag/documents/{document_id}/chunks/{chunk_id} | documents:read |
 
-The document endpoint returns the stored source text and its recomputed hash status. The chunk endpoint returns the source and chunk digests, offsets, excerpt, and three integrity booleans.
+The text document endpoint returns the stored source text and its recomputed hash status. The upload endpoint accepts files up to 10 MB and limits extracted text to 1 MB; PDF is capped at 500 pages, and DOCX archives are capped at 512 entries and 30 MB uncompressed. The parser does not execute embedded content, fetch external links, or write uploads to disk. It records the uploaded file SHA-256, sanitized display filename, parser, and media type. The chunk endpoint returns the source and chunk digests, offsets, excerpt, and three integrity booleans.
 
 metadata_filter is a bounded JSON object and is applied as JSONB containment before ranking. It never replaces the tenant predicate.
 
