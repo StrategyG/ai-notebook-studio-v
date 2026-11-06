@@ -37,6 +37,7 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
 
     try:
         with admin_engine.begin() as connection:
+            document_b = uuid4()
             connection.execute(
                 text(
                     "INSERT INTO rag_documents "
@@ -45,7 +46,7 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
                     "CAST(:metadata AS jsonb), 'integration-test')"
                 ),
                 {
-                    "id": uuid4(),
+                    "id": document_b,
                     "tenant_id": tenant_b,
                     "title": "Tenant B private source",
                     "source_uri": f"urn:rag-test:tenant-b:{tenant_b}",
@@ -54,12 +55,6 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
                     "metadata": '{"classification":"private"}',
                 },
             )
-            document_b = connection.execute(
-                text(
-                    "SELECT id FROM rag_documents WHERE tenant_id = :tenant_id"
-                ),
-                {"tenant_id": tenant_b},
-            ).scalar_one()
             connection.execute(
                 text(
                     "INSERT INTO rag_document_chunks "
@@ -130,7 +125,6 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
             assert document["content"] == service_content
 
         with Session(runtime_engine) as session:
-            isolated = RAGService(session, tenant_id=tenant_a, actor_subject="rag-test-user")
             visible = session.execute(
                 text("SELECT id FROM rag_documents WHERE tenant_id = :tenant_id"),
                 {"tenant_id": tenant_b},
