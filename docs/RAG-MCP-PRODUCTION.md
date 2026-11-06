@@ -4,7 +4,7 @@
 
 This branch adds a tenant-scoped PostgreSQL RAG path and a separately authenticated MCP Streamable HTTP resource server.
 
-The API currently ingests **extracted UTF-8 text**. A caller sends the document text, title, source URI, source type, and JSON metadata. The API does not fetch arbitrary URLs or parse binary PDF/DOCX files; upstream parsers must supply extracted text and preserve the original source URI. This avoids introducing an SSRF-capable URL crawler or unbounded file parser into the API process.
+The API ingests extracted UTF-8 text and provides a bounded multipart upload route for PDF, DOCX, HTML, Markdown, and UTF-8 TXT. Upload parsing is size-limited, does not execute embedded content, and does not write uploaded files to disk. The API does not fetch arbitrary URLs; a URL source URI is provenance for already-extracted text, not an instruction to crawl the network.
 
 ## Components
 
@@ -24,6 +24,7 @@ All routes require a verified bearer token and an active membership matching the
 | Method | Route | Permission | Purpose |
 |---|---|---|---|
 | POST | /api/v1/rag/documents | documents:write | Index extracted document text |
+| POST | /api/v1/rag/documents/upload | documents:write | Parse and index a bounded supported file upload |
 | POST | /api/v1/rag/search | rag:search | Hybrid semantic + lexical retrieval |
 | GET | /api/v1/rag/documents/{document_id} | documents:read | Read a tenant-owned source |
 | GET | /api/v1/rag/documents/{document_id}/chunks/{chunk_id} | documents:read | Verify citation provenance |
@@ -55,7 +56,7 @@ Example retrieval request:
 }
 ~~~
 
-source_type=url records the origin of already-extracted text. It does not cause the API to fetch the URL. URL fetching, if later required, must be implemented as a separate SSRF-hardened ingestion worker with DNS/IP validation, redirect restrictions, response-size limits, and content-type allowlisting.
+The upload endpoint accepts files up to 10 MB, caps extracted text at 1 million characters, limits PDFs to 500 pages, and bounds DOCX archive entries and uncompressed size. source_type=url records the origin of already-extracted text. It does not cause the API to fetch the URL. URL fetching, if later required, must be implemented as a separate SSRF-hardened ingestion worker with DNS/IP validation, redirect restrictions, response-size limits, and content-type allowlisting.
 
 ## Required configuration
 
@@ -76,7 +77,7 @@ Set secrets through the deployment secret manager. Never commit values to .env, 
 | AUTH_ALGORITHMS | No | Allowlisted RS256 or ES256; default RS256 |
 | MCP_ENABLED | No | false unless MCP is intentionally exposed |
 | MCP_RESOURCE_SERVER_URL | MCP | Public HTTPS URL ending in /mcp |
-| MCP_ALLOWED_HOSTS | MCP | Exact host entries, e.g. mcp.example.org,mcp.example.org:* |
+| MCP_ALLOWED_HOSTS | MCP | Exact host entries including default-port variants, e.g. mcp.example.org,mcp.example.org:443,mcp.example.org:* |
 | MCP_ALLOWED_ORIGINS | MCP | Explicit HTTPS browser origins; may be empty for non-browser clients |
 
 MCP must remain disabled until the resource URL, host allowlist, issuer/JWKS, audience, PostgreSQL role, and embedding provider are all configured. An incomplete enabled configuration intentionally prevents startup.
@@ -140,7 +141,7 @@ Acceptance targets:
 
 The first four targets are evaluated by the versioned retrieval script. The zero-leakage target is separately enforced by PostgreSQL integration tests that attempt cross-tenant reads, updates, deletes, and inserts using the restricted runtime role. A passing fixture benchmark alone does not prove production-domain relevance.
 
-Run the real-provider evaluation manually through the **RAG Retrieval Evaluation** GitHub Actions workflow after configuring the protected rag-evaluation environment secrets.
+Run the real-provider evaluation manually through the **RAG Live Retrieval Evaluation** GitHub Actions workflow after configuring the protected rag-evaluation environment secrets.
 
 ## Operational acceptance gates
 
