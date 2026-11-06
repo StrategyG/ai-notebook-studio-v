@@ -126,7 +126,9 @@ class Settings:
             and bool(endpoint.hostname)
             and not endpoint.username
             and not endpoint.password
+            and not endpoint.query
             and not endpoint.fragment
+            and endpoint.path.rstrip("/").endswith("/embeddings")
             and isinstance(self.embedding_model, str)
             and bool(self.embedding_model.strip())
             and len(self.embedding_model) <= 128
