@@ -24,6 +24,7 @@ class TokenVerificationError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class Principal:
+    issuer: str
     subject: str
     tenant_id: UUID
     roles: frozenset[str]
@@ -58,8 +59,11 @@ def verify_access_token(token: str, settings: Settings) -> Principal:
             options={"require": ["exp", "iss", "aud", "sub"]},
             leeway=30,
         )
+        issuer = claims.get("iss")
         subject = claims.get("sub")
         tenant_claim = claims.get("tenant_id")
+        if not isinstance(issuer, str) or not issuer or issuer != settings.auth_issuer:
+            raise TokenVerificationError("token issuer is invalid")
         if not isinstance(subject, str) or not subject or len(subject) > 255:
             raise TokenVerificationError("token subject is invalid")
         if not isinstance(tenant_claim, str):
@@ -81,6 +85,7 @@ def verify_access_token(token: str, settings: Settings) -> Principal:
             raise TokenVerificationError("token scope claim exceeds the allowed limit")
 
         return Principal(
+            issuer=issuer,
             subject=subject,
             tenant_id=tenant_id,
             roles=frozenset(raw_roles),
