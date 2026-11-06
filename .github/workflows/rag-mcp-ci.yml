@@ -1,0 +1,76 @@
+name: RAG and MCP verification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/rag-mcp-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/rag-mcp-ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rag-mcp-\${{ github.workflow }}-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api-tests:
+    name: Lint, unit, MCP, and PostgreSQL RLS integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ragtest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ragtest"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      PYTHONPATH: src
+      TEST_ADMIN_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/ragtest
+      TEST_DATABASE_URL: postgresql+psycopg://rag_runtime:rag_runtime@127.0.0.1:5432/ragtest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+      - name: Install API and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Prepare isolated PostgreSQL RLS test role
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d ragtest -v ON_ERROR_STOP=1 -c "CREATE ROLE rag_runtime LOGIN PASSWORD 'rag_runtime' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;"
+          psql -h 127.0.0.1 -U postgres -d ragtest -v ON_ERROR_STOP=1 -f migrations/0007_rag_pgvector.sql
+          psql -h 127.0.0.1 -U postgres -d ragtest -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO rag_runtime; GRANT USAGE ON TYPE vector TO rag_runtime; GRANT SELECT, INSERT, UPDATE, DELETE ON rag_documents, rag_document_chunks TO rag_runtime;"
+      - name: Ruff lint
+        run: python -m ruff check src tests
+      - name: Unit, API, MCP, and PostgreSQL integration tests
+        run: python -m pytest --cov=ai_notebook_api.rag --cov=ai_notebook_api.mcp_server --cov=ai_notebook_api.security --cov-report=term-missing
+      - name: Confirm PostgreSQL runtime role cannot bypass RLS
+        env:
+          PGPASSWORD: rag_runtime
+        run: |
+          psql -h 127.0.0.1 -U rag_runtime -d ragtest -v ON_ERROR_STOP=1 -c "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;"
