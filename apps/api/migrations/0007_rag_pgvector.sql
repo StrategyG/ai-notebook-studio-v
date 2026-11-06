@@ -11,14 +11,15 @@ CREATE TABLE IF NOT EXISTS rag_documents (
     source_uri varchar(2048) NOT NULL CHECK (length(btrim(source_uri)) BETWEEN 1 AND 2048),
     source_type varchar(32) NOT NULL
         CHECK (source_type IN ('url', 'upload', 'manual', 'repository')),
+    embedding_model varchar(128) NOT NULL,
     content text NOT NULL CHECK (length(content) BETWEEN 1 AND 1000000),
     content_sha256 varchar(64) NOT NULL CHECK (content_sha256 ~ '^[a-f0-9]{64}$'),
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb
         CHECK (jsonb_typeof(metadata) = 'object'),
     created_by varchar(255) NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT uq_rag_documents_tenant_source_hash
-        UNIQUE (tenant_id, source_uri, content_sha256),
+    CONSTRAINT uq_rag_documents_tenant_source_hash_model
+        UNIQUE (tenant_id, source_uri, content_sha256, embedding_model),
     CONSTRAINT uq_rag_documents_id_tenant UNIQUE (id, tenant_id)
 );
 
