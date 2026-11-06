@@ -47,7 +47,7 @@ GRANT USAGE ON TYPE vector TO app_runtime;
 GRANT SELECT, INSERT ON rag_documents, rag_document_chunks TO app_runtime;
 ~~~
 
-The migration role, database owner, and runtime API role must be separate. Never expose database credentials to the browser.
+The migration role, database owner, and runtime API role must be separate. In staging and production, `DATABASE_URL` must set `sslmode=verify-full`; weaker modes and plaintext remote connections are rejected. Never expose database credentials to the browser.
 
 ## RAG API
 
