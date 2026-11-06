@@ -54,10 +54,34 @@ def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool]:
                     "WHERE rolname = current_user"
                 )
             ).mappings().first()
+            runtime_role_owns_tenant_tables = connection.execute(
+                text(
+                    """
+                    SELECT EXISTS (
+                        SELECT 1
+                        FROM pg_class c
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE n.nspname = current_schema()
+                          AND c.relname IN (
+                              'tenant_memberships',
+                              'audit_events',
+                              'outbox_events',
+                              'provider_credentials',
+                              'rag_documents',
+                              'rag_document_chunks'
+                          )
+                          AND c.relowner = (
+                              SELECT oid FROM pg_roles WHERE rolname = current_user
+                          )
+                    )
+                    """
+                )
+            ).scalar_one()
             runtime_role_safe = (
                 role is not None
                 and not bool(role["rolsuper"])
                 and not bool(role["rolbypassrls"])
+                and not bool(runtime_role_owns_tenant_tables)
             )
 
             rag_rls_enforced = True
