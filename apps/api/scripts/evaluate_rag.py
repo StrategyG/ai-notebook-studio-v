@@ -5,13 +5,14 @@ import json
 import sys
 from pathlib import Path
 from statistics import mean
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from ai_notebook_api.core.config import get_settings, validate_rag_configuration
-from ai_notebook_api.db.session import apply_tenant_database_context, get_engine
+from ai_notebook_api.db.session import get_engine
+from ai_notebook_api.rag.chunking import chunk_text
 from ai_notebook_api.rag.embeddings import OpenAICompatibleEmbeddingClient
 from ai_notebook_api.rag.evaluation import (
     mrr_at_k,
@@ -24,26 +25,53 @@ from ai_notebook_api.rag.service import RAGService
 DATASET_PATH = Path(__file__).resolve().parents[1] / "tests" / "evaluation" / "rag_retrieval.json"
 
 
+class PrecomputedEmbeddingProvider:
+    """Supply vectors obtained from the configured remote provider before DB work begins."""
+
+    def __init__(self, vectors: list[list[float]]):
+        self.vectors = vectors
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        if len(texts) != len(self.vectors):
+            raise ValueError("precomputed evaluation vectors do not match the requested batch")
+        return self.vectors
+
+
 def _assert_restricted_runtime_role(session: Session) -> None:
     role = session.execute(
-        text(
-            "SELECT rolsuper, rolbypassrls "
-            "FROM pg_roles WHERE rolname = current_user"
-        )
+        text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
     ).one_or_none()
     if role is None or bool(role.rolsuper) or bool(role.rolbypassrls):
         raise RuntimeError("retrieval evaluation requires a non-superuser NOBYPASSRLS database role")
 
     rls = session.execute(
         text(
-            "SELECT count(*) "
-            "FROM pg_class "
+            "SELECT count(*) FROM pg_class "
             "WHERE oid IN (to_regclass('rag_documents'), to_regclass('rag_document_chunks')) "
             "AND relrowsecurity AND relforcerowsecurity"
         )
     ).scalar_one()
     if int(rls) != 2:
         raise RuntimeError("forced row-level security is required on both RAG tables")
+
+
+def _citation_is_verifiable(service: RAGService, citation: dict[str, object]) -> bool:
+    try:
+        source = service.get_chunk_source(
+            UUID(str(citation["document_id"])),
+            UUID(str(citation["chunk_id"])),
+        )
+    except (KeyError, ValueError, TypeError):
+        return False
+    return bool(
+        source
+        and source["source_uri"] == citation.get("source_uri")
+        and source["source_sha256"] == citation.get("source_sha256")
+        and source["chunk_sha256"] == citation.get("chunk_sha256")
+        and source["source_hash_valid"]
+        and source["chunk_hash_valid"]
+        and source["offsets_valid"]
+    )
 
 
 async def evaluate() -> int:
@@ -56,16 +84,29 @@ async def evaluate() -> int:
     if not dataset.get("documents") or not dataset.get("queries") or not dataset.get("targets"):
         raise RuntimeError("retrieval evaluation dataset is incomplete")
 
+    embedder = OpenAICompatibleEmbeddingClient(settings)
+
+    # Obtain every real vector before opening a database transaction. This prevents
+    # remote embedding latency from holding a pooled PostgreSQL connection or snapshot.
+    document_vectors: dict[str, list[list[float]]] = {}
+    for document in dataset["documents"]:
+        chunks = chunk_text(document["content"])
+        document_vectors[document["id"]] = await embedder.embed([chunk.text for chunk in chunks])
+
+    query_vectors: dict[str, list[float]] = {}
+    for query in dataset["queries"]:
+        vectors = await embedder.embed([query["query"]])
+        if len(vectors) != 1:
+            raise RuntimeError("embedding provider returned an invalid query vector count")
+        query_vectors[query["id"]] = vectors[0]
+
     engine = get_engine(settings.database_url)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     session: Session = factory()
-    embedder = OpenAICompatibleEmbeddingClient(settings)
-    # Every run gets a new, unguessable tenant namespace. All fixture writes are
-    # rolled back at the end so the evaluator never pollutes staging tenant data.
     tenant_id = uuid4()
     try:
         _assert_restricted_runtime_role(session)
-        apply_tenant_database_context(session, str(tenant_id))
+        session.commit()
         service = RAGService(session, tenant_id=tenant_id, actor_subject="rag-evaluation")
 
         indexed: dict[str, str] = {}
@@ -77,34 +118,52 @@ async def evaluate() -> int:
                 content=document["content"],
                 metadata=document["metadata"],
                 embedding_model=settings.embedding_model,
-                embedder=embedder,
+                embedder=PrecomputedEmbeddingProvider(document_vectors[document["id"]]),
                 embedding_dimensions=settings.embedding_dimensions,
             )
             indexed[document["id"]] = result["document_id"]
 
         metric_rows: list[dict[str, float | str]] = []
+        citation_count = 0
+        verified_citation_count = 0
         for query in dataset["queries"]:
             relevant = {indexed[item] for item in query["relevant_document_ids"]}
             response = await service.search(
                 query=query["query"],
+                metadata_filter=query.get("metadata_filter", {}),
                 embedding_model=settings.embedding_model,
                 limit=10,
-                embedder=embedder,
+                embedder=PrecomputedEmbeddingProvider([query_vectors[query["id"]]]),
                 embedding_dimensions=settings.embedding_dimensions,
             )
             retrieved = unique_document_ids(response["results"])
+            citations = response["citations"]
+            citation_count += len(citations)
+            verified_for_query = sum(
+                1 for citation in citations if _citation_is_verifiable(service, citation)
+            )
+            verified_citation_count += verified_for_query
+            citation_integrity = (
+                verified_for_query / len(citations) if citations else 0.0
+            )
             metric_rows.append(
                 {
                     "query_id": query["id"],
                     "recall_at_5": recall_at_k(retrieved, relevant, 5),
                     "mrr_at_10": mrr_at_k(retrieved, relevant, 10),
                     "ndcg_at_10": ndcg_at_k(retrieved, relevant, 10),
+                    "citation_integrity_rate": citation_integrity,
                 }
             )
 
         measured = {
             metric: mean(float(row[metric]) for row in metric_rows)
-            for metric in ("recall_at_5", "mrr_at_10", "ndcg_at_10")
+            for metric in (
+                "recall_at_5",
+                "mrr_at_10",
+                "ndcg_at_10",
+                "citation_integrity_rate",
+            )
         }
         targets = dataset["targets"]
         if any(name not in measured for name in targets):
@@ -114,6 +173,8 @@ async def evaluate() -> int:
             "dataset_version": dataset["dataset_version"],
             "tenant_id": str(tenant_id),
             "query_count": len(metric_rows),
+            "citation_count": citation_count,
+            "verified_citation_count": verified_citation_count,
             "targets": targets,
             "measured": measured,
             "per_query": metric_rows,
