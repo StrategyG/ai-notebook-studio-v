@@ -88,6 +88,8 @@ def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool, bool]:
                 text(
                     """
                     SELECT
+                        has_schema_privilege(current_user, current_schema(), 'USAGE')
+                        AND (
                         COALESCE(
                             has_table_privilege(
                                 current_user,
@@ -133,6 +135,18 @@ def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool, bool]:
                                 )
                             )
                         )
+                        AND (
+                            NOT :rag_enabled
+                            OR COALESCE(
+                                has_type_privilege(
+                                    current_user,
+                                    to_regtype('vector'),
+                                    'USAGE'
+                                ),
+                                false
+                            )
+                        )
+                        )
                     """
                 ),
                 {"rag_enabled": settings.rag_enabled},
@@ -140,8 +154,13 @@ def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool, bool]:
 
             rag_rls_enforced = True
             if settings.rag_enabled:
-                vector_extension_present = connection.execute(
-                    text("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')")
+                vector_extension_ready = connection.execute(
+                    text(
+                        "SELECT EXISTS ("
+                        "SELECT 1 FROM pg_extension WHERE extname = 'vector' "
+                        "AND string_to_array(extversion, '.')::integer[] >= ARRAY[0, 8, 0]::integer[]"
+                        ")"
+                    )
                 ).scalar_one()
                 rag_columns = set(
                     connection.execute(
@@ -153,7 +172,7 @@ def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool, bool]:
                 )
                 schema_present = (
                     schema_present
-                    and bool(vector_extension_present)
+                    and bool(vector_extension_ready)
                     and {"embedding_model", "metadata", "content_sha256"}.issubset(rag_columns)
                 )
 
