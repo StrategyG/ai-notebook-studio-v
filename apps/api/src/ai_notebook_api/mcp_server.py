@@ -144,8 +144,6 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
         metadata_filter: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Search only documents owned by the authenticated tenant and return source citations."""
-        if not settings.rag_enabled or not settings.embedding_configured:
-            raise RuntimeError("RAG retrieval is unavailable")
         session, membership = _open_authorized_session(
             settings,
             {"mcp:tools:call", "rag:search"},
@@ -170,8 +168,6 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
 
     async def rag_get_document(document_id: str) -> dict[str, Any]:
         """Read a document source and its SHA-256 provenance within the authenticated tenant."""
-        if not settings.rag_enabled:
-            raise RuntimeError("RAG retrieval is unavailable")
         try:
             parsed_document_id = UUID(document_id)
         except ValueError as exc:
