@@ -44,6 +44,8 @@ Apply migrations in lexical order:
 The RAG migration installs the vector extension, creates the document and chunk tables, a cosine HNSW index, a GIN full-text index, and forced tenant RLS policies. The runtime role must be a non-superuser without BYPASSRLS. Grant it only the required table privileges:
 
 ~~~sql
+GRANT USAGE ON SCHEMA public TO app_runtime;
+GRANT USAGE ON TYPE vector TO app_runtime;
 GRANT SELECT, INSERT ON rag_documents, rag_document_chunks TO app_runtime;
 ~~~
 
