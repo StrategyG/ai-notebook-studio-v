@@ -41,8 +41,8 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
             connection.execute(
                 text(
                     "INSERT INTO rag_documents "
-                    "(id, tenant_id, title, source_uri, source_type, content, content_sha256, metadata, created_by) "
-                    "VALUES (:id, :tenant_id, :title, :source_uri, 'manual', :content, :content_sha256, "
+                    "(id, tenant_id, title, source_uri, source_type, embedding_model, content, content_sha256, metadata, created_by) "
+                    "VALUES (:id, :tenant_id, :title, :source_uri, 'manual', 'fixture-embedding-v1', :content, :content_sha256, "
                     "CAST(:metadata AS jsonb), 'integration-test')"
                 ),
                 {
@@ -79,6 +79,7 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
                 title="PostgreSQL hybrid retrieval",
                 source_uri=f"urn:rag-test:tenant-a:{tenant_a}",
                 source_type="manual",
+                embedding_model="fixture-embedding-v1",
                 content=service_content,
                 metadata={"classification": "internal", "topic": "database"},
                 embedder=FixedEmbeddingProvider(),
@@ -99,6 +100,7 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
 
             response = await service.search(
                 query="pgvector hybrid search",
+                embedding_model="fixture-embedding-v1",
                 limit=5,
                 metadata_filter={"topic": "database"},
                 embedder=FixedEmbeddingProvider(),
