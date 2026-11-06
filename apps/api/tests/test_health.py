@@ -211,3 +211,30 @@ def test_readiness_returns_503_when_jwks_or_database_is_unavailable(monkeypatch)
 
 def test_liveness_is_independent_of_database_and_identity_dependencies() -> None:
     assert health.liveness() == {"status": "alive"}
+
+
+
+def test_database_health_rejects_bypassrls_even_when_role_is_not_superuser(monkeypatch) -> None:
+    connection = FakeConnection(role={"rolsuper": False, "rolbypassrls": True})
+    monkeypatch.setattr(health, "get_engine", lambda _url: FakeEngine(connection))
+
+    result = health._database_health(_rag_settings())
+
+    assert result[2] is False
+
+
+def test_database_health_rejects_missing_core_tables_and_missing_privileges(monkeypatch) -> None:
+    connection = FakeConnection(
+        tables=["tenant_memberships", "audit_events"],
+        privileges=False,
+    )
+    monkeypatch.setattr(health, "get_engine", lambda _url: FakeEngine(connection))
+
+    result = health._database_health(_rag_settings())
+
+    assert result[1] is False
+    assert result[4] is False
+
+
+def test_database_health_returns_false_when_persistence_is_not_configured() -> None:
+    assert health._database_health(Settings()) == (False, False, False, False, False)
