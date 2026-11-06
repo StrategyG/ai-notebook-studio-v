@@ -7,6 +7,7 @@ from ai_notebook_api import __version__
 from ai_notebook_api.api.health import router as health_router
 from ai_notebook_api.api.identity import router as identity_router
 from ai_notebook_api.api.rag import router as rag_router
+from ai_notebook_api.api.rag_upload import router as rag_upload_router
 from ai_notebook_api.api.tasks import router as task_router
 from ai_notebook_api.api.tenant import router as tenant_router
 from ai_notebook_api.core.config import (
@@ -69,6 +70,7 @@ app.include_router(identity_router)
 app.include_router(tenant_router)
 app.include_router(task_router)
 app.include_router(rag_router)
+app.include_router(rag_upload_router)
 
 
 @app.get("/api/v1/meta", tags=["platform"])
