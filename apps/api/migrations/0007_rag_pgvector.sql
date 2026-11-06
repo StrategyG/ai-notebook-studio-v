@@ -17,8 +17,8 @@ BEGIN
         RAISE EXCEPTION 'pgvector >= 0.8.0 is required for filtered iterative HNSW scans (found %)',
             COALESCE(installed_version, 'not installed');
     END IF;
-END
-$$;
+END;
+$;
 
 CREATE TABLE IF NOT EXISTS rag_documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
