@@ -6,6 +6,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from ai_notebook_api.api.health import _database_health
+from ai_notebook_api.core.config import Settings
 from ai_notebook_api.services.audit import append_audit_event, verify_audit_chain
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
@@ -136,3 +138,9 @@ def test_postgres_audit_trigger_rejects_update_and_delete() -> None:
                     raise AssertionError("audit ledger mutation was not rejected")
     finally:
         engine.dispose()
+
+
+@unittest.skipUnless(DATABASE_URL, "PostgreSQL RLS integration DB not configured")
+def test_readiness_database_checks_real_pgvector_schema_and_runtime_role() -> None:
+    settings = Settings(database_url=DATABASE_URL, rag_enabled=True)
+    assert _database_health(settings) == (True, True, True, True, True)
