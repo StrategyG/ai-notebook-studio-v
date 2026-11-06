@@ -56,8 +56,6 @@ jobs:
         run: python -m compileall -q src tests scripts
       - name: Ruff lint
         run: ruff check src tests scripts
-      - name: Unit and API contract tests
-        run: pytest --cov=ai_notebook_api --cov-report=term-missing --cov-fail-under=85
       - name: Provision restricted PostgreSQL RLS test role and migrations
         env:
           MIGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_notebook_test
@@ -86,7 +84,7 @@ jobs:
                   "GRANT SELECT, INSERT ON audit_events TO app_runtime; "
                   "GRANT SELECT, INSERT, UPDATE ON outbox_events TO app_runtime; "
                   "GRANT SELECT, INSERT, UPDATE ON provider_credentials TO app_runtime; "
-                  "GRANT SELECT, INSERT ON rag_documents, rag_document_chunks TO app_runtime"
+                  "GRANT SELECT, INSERT, UPDATE, DELETE ON rag_documents, rag_document_chunks TO app_runtime"
               )
               connection.execute(
                   "INSERT INTO tenant_memberships (tenant_id, issuer, subject, role, status) VALUES "
@@ -135,8 +133,8 @@ jobs:
                       (uuid4(), tenant_id, document_id, content, len(content), digest, embedding),
                   )
           PY
-      - name: PostgreSQL row-level security, hybrid retrieval and immutable audit integration tests
+      - name: Full unit, API, security and PostgreSQL integration suite with coverage gate
         env:
           TEST_DATABASE_URL: postgresql://app_runtime:app-test-password@localhost:5432/ai_notebook_test
           TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_notebook_test
-        run: pytest -q tests/test_postgres_rls.py tests/test_rag_postgres.py
+        run: pytest --cov=ai_notebook_api --cov-report=term-missing --cov-fail-under=85
