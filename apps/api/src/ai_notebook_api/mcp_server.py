@@ -143,6 +143,7 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
                 query=query,
                 limit=limit,
                 metadata_filter=metadata_filter or {},
+                embedding_model=settings.embedding_model,
                 embedder=OpenAICompatibleEmbeddingClient(settings),
                 embedding_dimensions=settings.embedding_dimensions,
             )
