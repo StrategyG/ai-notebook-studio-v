@@ -23,7 +23,7 @@ def configured_mcp_settings() -> Settings:
         embedding_dimensions=1536,
         mcp_enabled=True,
         mcp_resource_server_url="https://testserver/mcp",
-        mcp_allowed_hosts=("testserver:80",),
+        mcp_allowed_hosts=("testserver", "testserver:80"),
     )
 
 
@@ -74,6 +74,17 @@ def test_mcp_tool_allowlist_is_explicit_and_read_only() -> None:
 
 def test_mcp_server_is_not_created_when_disabled() -> None:
     assert build_mcp_server(Settings()) == (None, None)
+
+
+def test_mcp_configuration_rejects_host_not_bound_to_resource_url() -> None:
+    settings = configured_mcp_settings()
+    settings = Settings(
+        **{
+            field: ("attacker.example",) if field == "mcp_allowed_hosts" else getattr(settings, field)
+            for field in settings.__dataclass_fields__
+        }
+    )
+    assert settings.mcp_configured is False
 
 
 def test_mcp_configuration_fails_closed_without_host_allowlist() -> None:
