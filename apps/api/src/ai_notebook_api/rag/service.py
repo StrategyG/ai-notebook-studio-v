@@ -137,16 +137,18 @@ class RAGService:
                 "reused": True,
             }
 
-        document_id = uuid4()
-        self.session.execute(
+        proposed_document_id = uuid4()
+        document_id = self.session.execute(
             text(
                 "INSERT INTO rag_documents "
                 "(id, tenant_id, title, source_uri, source_type, embedding_model, content, content_sha256, metadata, created_by) "
                 "VALUES (:id, :tenant_id, :title, :source_uri, :source_type, :embedding_model, :content, :content_sha256, "
-                "CAST(:metadata AS jsonb), :created_by)"
+                "CAST(:metadata AS jsonb), :created_by) "
+                "ON CONFLICT (tenant_id, source_uri, content_sha256, embedding_model) DO NOTHING "
+                "RETURNING id"
             ),
             {
-                "id": document_id,
+                "id": proposed_document_id,
                 "tenant_id": self.tenant_id,
                 "title": title.strip(),
                 "source_uri": source_uri,
@@ -157,7 +159,34 @@ class RAGService:
                 "metadata": metadata_json,
                 "created_by": self.actor_subject,
             },
-        )
+        ).scalar_one_or_none()
+        if document_id is None:
+            # A concurrent request inserted the same immutable source while this
+            # request was obtaining embeddings. Reuse that version, never duplicate chunks.
+            concurrent = self.session.execute(
+                text(
+                    "SELECT id, (SELECT count(*) FROM rag_document_chunks c "
+                    "WHERE c.document_id = d.id AND c.tenant_id = d.tenant_id) AS chunk_count "
+                    "FROM rag_documents d "
+                    "WHERE d.tenant_id = :tenant_id AND d.source_uri = :source_uri "
+                    "AND d.content_sha256 = :source_hash AND d.embedding_model = :embedding_model"
+                ),
+                {
+                    "tenant_id": self.tenant_id,
+                    "source_uri": source_uri,
+                    "source_hash": source_hash,
+                    "embedding_model": embedding_model,
+                },
+            ).mappings().first()
+            if concurrent is None:
+                raise RuntimeError("idempotent document insert conflicted without a visible source")
+            return {
+                "document_id": str(concurrent["id"]),
+                "content_sha256": source_hash,
+                "chunk_count": int(concurrent["chunk_count"]),
+                "indexed": True,
+                "reused": True,
+            }
 
         for chunk, vector_literal in zip(chunks, vector_values, strict=True):
             self.session.execute(
