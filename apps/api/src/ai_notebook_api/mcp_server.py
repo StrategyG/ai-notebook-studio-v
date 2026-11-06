@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import AnyHttpUrl
 from sqlalchemy.orm import Session, sessionmaker
 
-from mcp.server import MCPServer
+from mcp.server.mcpserver import MCPServer
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
