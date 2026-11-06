@@ -151,6 +151,10 @@ class Settings:
             and resource.path.rstrip("/").endswith("/mcp")
             and not resource.query
             and not resource.fragment
+            and (
+                resource.hostname in self.mcp_allowed_hosts
+                or f"{resource.hostname}:*" in self.mcp_allowed_hosts
+            )
             and all(
                 origin.scheme == "https"
                 and bool(origin.netloc)
