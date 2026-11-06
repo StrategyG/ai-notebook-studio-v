@@ -56,7 +56,7 @@ Example retrieval request:
 }
 ~~~
 
-The upload endpoint accepts files up to 10 MB, caps extracted text at 1 million characters, limits PDFs to 500 pages, and bounds DOCX archive entries and uncompressed size. source_type=url records the origin of already-extracted text. It does not cause the API to fetch the URL. URL fetching, if later required, must be implemented as a separate SSRF-hardened ingestion worker with DNS/IP validation, redirect restrictions, response-size limits, and content-type allowlisting.
+The upload endpoint enforces a streaming multipart request ceiling of 10 MB plus bounded multipart overhead before form parsing, accepts files up to 10 MB, caps extracted text at 1 million characters, limits PDFs to 500 pages, and bounds DOCX archive entries and uncompressed size. source_type=url records the origin of already-extracted text. It does not cause the API to fetch the URL. URL fetching, if later required, must be implemented as a separate SSRF-hardened ingestion worker with DNS/IP validation, redirect restrictions, response-size limits, and content-type allowlisting.
 
 ## Required configuration
 
