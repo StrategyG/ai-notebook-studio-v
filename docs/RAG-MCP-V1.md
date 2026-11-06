@@ -16,7 +16,7 @@ Binary PDF, DOCX, spreadsheet, OCR, remote URL fetching, answer generation, and 
 6. Search retrieves vector candidates with pgvector cosine distance and lexical candidates with PostgreSQL full-text search. Reciprocal rank fusion combines the two ranked lists.
 7. Search results include source URI, document and chunk hashes, and character offsets. The citation-source endpoint recomputes both hashes and checks that the cited excerpt equals the source slice.
 
-Re-ingesting the same (tenant_id, source_uri, content_sha256) is idempotent. A changed source hash creates a new immutable document version.
+Re-ingesting the same (tenant_id, source_uri, content_sha256, embedding_model) is idempotent, including concurrent duplicate requests. A changed source hash or embedding model creates a distinct immutable document version.
 
 ## API
 
@@ -93,13 +93,7 @@ When MCP is disabled, /mcp returns 503. If MCP_ENABLED=true but any required set
 
 The versioned dataset is tests/evaluation/rag_retrieval.json. It contains 12 source documents and 12 retrieval queries. The evaluator uses the configured live embedding endpoint and the real PostgreSQL hybrid search path; test doubles are not used by the evaluation script.
 
-Run it from apps/api with a fresh, isolated tenant UUID:
-
-~~~bash
-RAG_ENABLED=true \
-RAG_EVAL_TENANT_ID=<fresh-isolated-uuid> \
-python scripts/evaluate_rag.py
-~~~
+Run it through the **RAG Live Retrieval Evaluation** GitHub Actions workflow after configuring the protected `staging` environment with `RAG_EVAL_DATABASE_URL`, `EMBEDDING_API_URL`, `EMBEDDING_API_KEY`, and the `EMBEDDING_MODEL` repository variable. The evaluator creates a unique tenant namespace per run, verifies that the database role is a non-superuser without `BYPASSRLS`, and rolls back all fixture writes when finished.
 
 The evaluator reports:
 
@@ -109,7 +103,7 @@ The evaluator reports:
 | MRR@10 | >= 0.80 |
 | NDCG@10 | >= 0.85 |
 
-A non-zero exit code means one or more targets were missed. Use a fresh isolated tenant for each clean evaluation run; the script does not delete data from an existing tenant.
+A non-zero exit code means one or more targets were missed. Fixture writes are rolled back; no pre-existing tenant data is modified.
 
 ## Evidence and release boundary
 
