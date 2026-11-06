@@ -86,7 +86,7 @@ Only these read-only tools are registered:
 - rag_search(query, limit, metadata_filter)
 - rag_get_document(document_id)
 
-Each tool re-resolves active issuer-scoped tenant membership and checks database-backed role permissions. A client cannot register a tool or supply an arbitrary server-side function name. The MCP server is stateless and uses JSON responses with a 1 MiB request-body limit. Host allowlisting is mandatory; browser origins, if any, must be listed explicitly.
+Each tool re-resolves active issuer-scoped tenant membership and checks database-backed role permissions plus its narrow token scope. A client cannot register a tool or supply an arbitrary server-side function name. The MCP server is stateless and uses JSON responses with a 1 MiB request-body limit. Host allowlisting is mandatory; browser origins, if any, must be listed explicitly.
 
 When MCP is disabled, /mcp returns 503. If MCP_ENABLED=true but any required setting is missing, startup fails closed.
 
