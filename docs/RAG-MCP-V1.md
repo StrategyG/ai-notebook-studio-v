@@ -11,7 +11,7 @@ Spreadsheet parsing, OCR, remote URL fetching, answer generation, and reranking 
 1. The API verifies the JWT signature, issuer, audience, expiry, and required claims.
 2. It resolves an active membership by (tenant_id, issuer, subject) and reads the role from PostgreSQL.
 3. The tenant ID is set transaction-locally in app.tenant_id; RLS is the final database boundary.
-4. The ingestion endpoint validates source URI and bounded JSON metadata, hashes the original text, chunks it with deterministic character offsets, and calls the configured OpenAI-compatible embedding endpoint.
+4. The upload endpoint enforces a 10 MiB raw-file limit, parses PDF/DOCX/HTML/Markdown/TXT without executing embedded content or fetching remote URLs, records the uploaded file SHA-256 and parser metadata, and passes extracted text to ingestion. The direct-text endpoint validates source URI and bounded JSON metadata. Both hash extracted source text, chunk it with deterministic character offsets, and call the configured OpenAI-compatible embedding endpoint.
 5. Every chunk stores its source document ID, ordinal, exact offsets, SHA-256 digest, and 1536-dimensional vector.
 6. Search retrieves vector candidates with pgvector cosine distance and lexical candidates with PostgreSQL full-text search. Reciprocal rank fusion combines the two ranked lists.
 7. Search results include source URI, document and chunk hashes, and character offsets. The citation-source endpoint recomputes both hashes and checks that the cited excerpt equals the source slice.
