@@ -71,7 +71,8 @@ async def test_embedding_client_rejects_non_finite_values() -> None:
     def handler(_request: httpx.Request) -> httpx.Response:
         vector = [0.1] * DIMENSIONS
         vector[10] = float("nan")
-        return httpx.Response(200, json={"data": [{"index": 0, "embedding": vector}]})
+        body = json.dumps({"data": [{"index": 0, "embedding": vector}]}, allow_nan=True)
+        return httpx.Response(200, content=body, headers={"content-type": "application/json"})
 
     client = OpenAICompatibleEmbeddingClient(
         embedding_settings(),
