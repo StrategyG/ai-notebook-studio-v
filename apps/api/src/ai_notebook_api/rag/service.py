@@ -97,8 +97,12 @@ class RAGService:
             raise ValueError("content must contain between 1 and 1000000 non-whitespace characters")
         if source_type not in {"url", "upload", "manual", "repository"}:
             raise ValueError("source_type is not supported")
-        if not embedding_model or len(embedding_model) > 128:
-            raise ValueError("embedding_model must contain between 1 and 128 characters")
+        if (
+            not isinstance(embedding_model, str)
+            or not embedding_model.strip()
+            or len(embedding_model) > 128
+        ):
+            raise ValueError("embedding_model must contain between 1 and 128 non-whitespace characters")
         source_uri = validate_source_uri(source_uri)
         metadata_json = _json_object(metadata)
         source_hash = _sha256(content)
@@ -231,8 +235,12 @@ class RAGService:
             raise ValueError("query must contain between 1 and 2000 characters")
         if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 20:
             raise ValueError("limit must be an integer between 1 and 20")
-        if not embedding_model or len(embedding_model) > 128:
-            raise ValueError("embedding_model must contain between 1 and 128 characters")
+        if (
+            not isinstance(embedding_model, str)
+            or not embedding_model.strip()
+            or len(embedding_model) > 128
+        ):
+            raise ValueError("embedding_model must contain between 1 and 128 non-whitespace characters")
         metadata_json = _json_object(metadata_filter, maximum_bytes=4096)
         vectors = await embedder.embed([query.strip()])
         if len(vectors) != 1:
