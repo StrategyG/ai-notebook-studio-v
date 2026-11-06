@@ -103,6 +103,7 @@ The evaluator reports:
 | Recall@5 | >= 0.90 |
 | MRR@10 | >= 0.80 |
 | NDCG@10 | >= 0.85 |
+| Citation integrity rate | 1.00 |
 | Citation integrity | 1.00 |
 
 A non-zero exit code means one or more targets were missed. Fixture writes are rolled back; no pre-existing tenant data is modified.
