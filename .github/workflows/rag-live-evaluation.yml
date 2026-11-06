@@ -41,6 +41,10 @@ jobs:
       - name: Validate staging evaluation secrets without printing values
         run: |
           test -n "$DATABASE_URL" || { echo "RAG_EVAL_DATABASE_URL is required in the staging environment"; exit 1; }
+          case "$DATABASE_URL" in
+            *sslmode=verify-full*) ;;
+            *) echo "RAG_EVAL_DATABASE_URL must require sslmode=verify-full"; exit 1 ;;
+          esac
           test -n "$EMBEDDING_API_URL" || { echo "EMBEDDING_API_URL is required in the staging environment"; exit 1; }
           test -n "$EMBEDDING_API_KEY" || { echo "EMBEDDING_API_KEY is required in the staging environment"; exit 1; }
           test -n "$EMBEDDING_MODEL" || { echo "EMBEDDING_MODEL repository variable is required"; exit 1; }
