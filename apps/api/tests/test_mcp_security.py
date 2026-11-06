@@ -2,6 +2,7 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from mcp.client import Client
 
 from ai_notebook_api.core.config import Settings
 from ai_notebook_api.main import app
@@ -103,3 +104,14 @@ def test_disabled_mcp_endpoint_returns_service_unavailable() -> None:
     response = TestClient(app).post("/mcp", json={})
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "mcp_not_enabled"
+
+
+@pytest.mark.asyncio
+async def test_mcp_server_registers_only_the_allowlisted_tools() -> None:
+    server, _asgi_app = build_mcp_server(configured_mcp_settings())
+    assert server is not None
+
+    async with Client(server) as client:
+        names = {tool.name for tool in (await client.list_tools()).tools}
+
+    assert names == MCP_ALLOWED_TOOLS
