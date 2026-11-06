@@ -120,6 +120,7 @@ Each run creates a unique evaluation tenant namespace and rolls back fixture wri
 | Recall@5 | 0.90 |
 | MRR@10 | 0.80 |
 | NDCG@10 | 0.85 |
+| Citation integrity rate | 1.00 |
 | Citation integrity | 1.00 |
 
 A failed metric exits non-zero. The small pinned dataset is a regression baseline; before release, supplement it with a representative, reviewed corpus and queries from the intended deployment domain.
