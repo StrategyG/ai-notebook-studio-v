@@ -1,0 +1,224 @@
+{
+  "dataset_version": "rag-retrieval-v1",
+  "targets": {
+    "recall_at_5": 0.9,
+    "mrr_at_10": 0.8,
+    "ndcg_at_10": 0.85,
+    "citation_integrity_rate": 1
+  },
+  "documents": [
+    {
+      "id": "pgvector",
+      "title": "PostgreSQL pgvector and vector indexes",
+      "source_uri": "urn:rag-eval:v1:pgvector",
+      "metadata": {
+        "area": "database",
+        "topic": "vector-search"
+      },
+      "content": "pgvector is a PostgreSQL extension for storing and querying vector embeddings. It supports exact nearest-neighbor search and approximate indexes such as HNSW and IVFFlat. A cosine-distance operator and a vector_cosine_ops index can accelerate semantic retrieval while keeping document vectors inside PostgreSQL."
+    },
+    {
+      "id": "hybrid",
+      "title": "Hybrid retrieval with reciprocal rank fusion",
+      "source_uri": "urn:rag-eval:v1:hybrid",
+      "metadata": {
+        "area": "retrieval",
+        "topic": "hybrid-search"
+      },
+      "content": "Hybrid search combines semantic vector similarity with lexical full-text retrieval. PostgreSQL websearch_to_tsquery and ts_rank_cd provide lexical candidates, while pgvector returns nearest embedding candidates. Reciprocal rank fusion combines the ranked lists without requiring the two score scales to be calibrated."
+    },
+    {
+      "id": "chunking",
+      "title": "Document chunking and overlap",
+      "source_uri": "urn:rag-eval:v1:chunking",
+      "metadata": {
+        "area": "retrieval",
+        "topic": "chunking"
+      },
+      "content": "Document chunking splits long source material into bounded passages before embedding. Chunk overlap preserves context across boundaries, while stable character offsets allow every retrieved passage to be traced back to the original text. Chunk size and overlap should be measured against retrieval quality rather than selected by intuition alone."
+    },
+    {
+      "id": "embeddings",
+      "title": "Embedding model integration",
+      "source_uri": "urn:rag-eval:v1:embeddings",
+      "metadata": {
+        "area": "models",
+        "topic": "embeddings"
+      },
+      "content": "An embedding model maps text into a fixed-dimension numeric vector. The ingestion pipeline must call the configured embedding endpoint, validate response ordering, vector dimensions, and finite numeric values, then store the vectors with their source chunks. Production must fail closed when the embedding provider is unavailable instead of generating synthetic vectors."
+    },
+    {
+      "id": "rls",
+      "title": "Tenant isolation with PostgreSQL row-level security",
+      "source_uri": "urn:rag-eval:v1:rls",
+      "metadata": {
+        "area": "security",
+        "topic": "tenant-isolation"
+      },
+      "content": "PostgreSQL row-level security restricts document and chunk rows to the active tenant. The API sets app.tenant_id transaction-locally only after validating the signed identity and active database membership. FORCE ROW LEVEL SECURITY ensures table owners are also subject to policies, and the runtime database role must not have BYPASSRLS."
+    },
+    {
+      "id": "metadata",
+      "title": "Metadata filtering for retrieval",
+      "source_uri": "urn:rag-eval:v1:metadata",
+      "metadata": {
+        "area": "retrieval",
+        "topic": "metadata-filtering",
+        "department": "engineering"
+      },
+      "content": "Metadata filtering narrows retrieval to documents that satisfy structured constraints such as department, document type, classification, or project label. PostgreSQL JSONB containment can apply a parameterized metadata filter before vector and lexical ranking. The filter must be validated as a bounded JSON object and must never replace the tenant security predicate."
+    },
+    {
+      "id": "citations",
+      "title": "Citation and source provenance",
+      "source_uri": "urn:rag-eval:v1:citations",
+      "metadata": {
+        "area": "quality",
+        "topic": "citations"
+      },
+      "content": "A verifiable RAG citation identifies the source document and exact retrieved chunk. Store the source URI, document SHA-256, chunk SHA-256, and original character offsets. A source verification endpoint can recompute hashes and compare the cited excerpt with the corresponding slice of the original document."
+    },
+    {
+      "id": "mcp-auth",
+      "title": "MCP resource server authentication",
+      "source_uri": "urn:rag-eval:v1:mcp-auth",
+      "metadata": {
+        "area": "security",
+        "topic": "mcp-auth"
+      },
+      "content": "A remote MCP server over Streamable HTTP acts as an OAuth 2.1 resource server. It verifies bearer access tokens on every request and does not issue user tokens. The token verifier must validate signature, issuer, audience, expiry, tenant identity, and required scopes before the server executes any tool."
+    },
+    {
+      "id": "allowlist",
+      "title": "MCP tool allowlisting",
+      "source_uri": "urn:rag-eval:v1:allowlist",
+      "metadata": {
+        "area": "security",
+        "topic": "tool-allowlist"
+      },
+      "content": "MCP tool allowlisting exposes only explicitly registered, reviewed capabilities. A caller must not be able to supply an arbitrary tool name or dynamically register a server-side function. Each allowed tool still performs tenant membership and role authorization before accessing documents or retrieval results."
+    },
+    {
+      "id": "metrics",
+      "title": "Retrieval quality evaluation metrics",
+      "source_uri": "urn:rag-eval:v1:metrics",
+      "metadata": {
+        "area": "quality",
+        "topic": "evaluation"
+      },
+      "content": "Retrieval quality can be measured with Recall at K, mean reciprocal rank, and normalized discounted cumulative gain. Recall at five measures whether relevant sources appear in the first five results. MRR rewards an early first relevant result, while NDCG rewards placing relevant documents near the top of the ranking."
+    },
+    {
+      "id": "issuer",
+      "title": "Issuer-scoped OIDC principal identity",
+      "source_uri": "urn:rag-eval:v1:issuer",
+      "metadata": {
+        "area": "security",
+        "topic": "oidc-identity"
+      },
+      "content": "An OIDC principal is identified by the issuer and subject pair, not by subject alone. Different identity providers can issue the same sub value to unrelated people. Tenant membership must therefore match tenant_id, issuer, and subject, and legacy memberships without a verified issuer must not authorize requests."
+    },
+    {
+      "id": "provenance",
+      "title": "Source ingestion integrity",
+      "source_uri": "urn:rag-eval:v1:provenance",
+      "metadata": {
+        "area": "quality",
+        "topic": "source-integrity"
+      },
+      "content": "Document ingestion should preserve the exact source text and compute a SHA-256 digest before chunking. Every chunk records its ordinal, start and end offsets, and its own digest. Re-ingesting the same tenant source URI and content digest should be idempotent and must not create duplicate chunks."
+    }
+  ],
+  "queries": [
+    {
+      "id": "q01",
+      "query": "How does PostgreSQL store vector embeddings and accelerate cosine nearest neighbor lookup with HNSW?",
+      "relevant_document_ids": [
+        "pgvector"
+      ]
+    },
+    {
+      "id": "q02",
+      "query": "Explain reciprocal rank fusion for combining PostgreSQL full text and semantic vector search.",
+      "relevant_document_ids": [
+        "hybrid"
+      ]
+    },
+    {
+      "id": "q03",
+      "query": "Why use overlapping text chunks and source character offsets when splitting long documents?",
+      "relevant_document_ids": [
+        "chunking"
+      ]
+    },
+    {
+      "id": "q04",
+      "query": "How must the embedding endpoint response be validated before saving fixed dimension vectors?",
+      "relevant_document_ids": [
+        "embeddings"
+      ]
+    },
+    {
+      "id": "q05",
+      "query": "How do transaction local tenant context and FORCE ROW LEVEL SECURITY prevent cross tenant document reads?",
+      "relevant_document_ids": [
+        "rls"
+      ]
+    },
+    {
+      "id": "q06",
+      "query": "Filter retrieval by department or classification using PostgreSQL JSONB metadata containment.",
+      "relevant_document_ids": [
+        "metadata"
+      ],
+      "metadata_filter": {
+        "area": "retrieval",
+        "topic": "metadata-filtering",
+        "department": "engineering"
+      }
+    },
+    {
+      "id": "q07",
+      "query": "What hashes and character offsets make a retrieved citation verifiable against its original document?",
+      "relevant_document_ids": [
+        "citations",
+        "provenance"
+      ]
+    },
+    {
+      "id": "q08",
+      "query": "What does an OAuth protected MCP Streamable HTTP resource server validate on bearer tokens?",
+      "relevant_document_ids": [
+        "mcp-auth"
+      ]
+    },
+    {
+      "id": "q09",
+      "query": "How can an MCP client be prevented from calling unregistered or arbitrary tools?",
+      "relevant_document_ids": [
+        "allowlist"
+      ]
+    },
+    {
+      "id": "q10",
+      "query": "Compare Recall at 5, MRR at 10, and NDCG at 10 for retrieval ranking evaluation.",
+      "relevant_document_ids": [
+        "metrics"
+      ]
+    },
+    {
+      "id": "q11",
+      "query": "Why must OIDC membership be matched by issuer and subject rather than sub alone?",
+      "relevant_document_ids": [
+        "issuer"
+      ]
+    },
+    {
+      "id": "q12",
+      "query": "How does SHA-256 source hashing make document ingestion idempotent and preserve chunk integrity?",
+      "relevant_document_ids": [
+        "provenance"
+      ]
+    }
+  ]
+}

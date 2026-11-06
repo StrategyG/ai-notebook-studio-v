@@ -10,6 +10,14 @@ from ai_notebook_api.services.audit import append_audit_event, verify_audit_chai
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
 ADMIN_DATABASE_URL = os.getenv("TEST_ADMIN_DATABASE_URL")
+TENANT_TABLES = (
+    "tenant_memberships",
+    "audit_events",
+    "outbox_events",
+    "provider_credentials",
+    "rag_documents",
+    "rag_document_chunks",
+)
 
 
 @unittest.skipUnless(DATABASE_URL, "PostgreSQL RLS integration DB not configured")
@@ -21,7 +29,7 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
     try:
         with engine.connect() as connection:
             with connection.begin():
-                for table in ("tenant_memberships", "audit_events", "outbox_events", "provider_credentials"):
+                for table in TENANT_TABLES:
                     assert connection.execute(
                         text(f"SELECT tenant_id::text FROM {table}")
                     ).scalars().all() == []
@@ -31,7 +39,7 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
                     text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": tenant_a},
                 )
-                for table in ("tenant_memberships", "audit_events", "outbox_events", "provider_credentials"):
+                for table in TENANT_TABLES:
                     assert connection.execute(
                         text(f"SELECT tenant_id::text FROM {table}")
                     ).scalars().all() == [tenant_a]
@@ -41,7 +49,7 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
                     text("SELECT set_config('app.tenant_id', :tenant_id, true)"),
                     {"tenant_id": tenant_b},
                 )
-                for table in ("tenant_memberships", "audit_events", "outbox_events", "provider_credentials"):
+                for table in TENANT_TABLES:
                     assert connection.execute(
                         text(f"SELECT tenant_id::text FROM {table}")
                     ).scalars().all() == [tenant_b]
@@ -71,6 +79,13 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
                         "created_by) VALUES (:tenant_id, 'openai', 'cross-tenant', 'ci', "
                         "decode(repeat('00', 12), 'hex'), decode('01', 'hex'), 'user')",
                     ),
+                    (
+                        "rag_documents",
+                        "(tenant_id, title, source_uri, source_type, embedding_model, content, content_sha256, "
+                        "metadata, created_by) VALUES (:tenant_id, 'cross-tenant', "
+                        "'urn:cross-tenant:test', 'manual', 'fixture-embedding-v1', 'x', repeat('a', 64), "
+                        "'{}'::jsonb, 'user')",
+                    ),
                 ):
                     try:
                         with connection.begin_nested():
@@ -97,8 +112,6 @@ def test_postgres_rls_hides_rows_outside_transaction_tenant() -> None:
             )
             sequence = event.sequence
             session.commit()
-            # The tenant GUC is transaction-local; do not dereference an
-            # expired ORM object after commit outside the tenant context.
             assert sequence == 1
             assert verify_audit_chain(session, tenant_id=tenant_c)
     finally:

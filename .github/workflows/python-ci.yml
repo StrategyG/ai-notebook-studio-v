@@ -23,10 +23,10 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
-        image: postgres:16
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -53,21 +53,25 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[dev]'
       - name: Compile Python sources
-        run: python -m compileall -q src tests
+        run: python -m compileall -q src tests scripts
       - name: Ruff lint
-        run: ruff check src tests
-      - name: Unit and API contract tests
-        run: pytest --cov=ai_notebook_api --cov-report=term-missing --cov-fail-under=85
+        run: ruff check src tests scripts
       - name: Provision restricted PostgreSQL RLS test role and migrations
         env:
           MIGRATION_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_notebook_test
         run: |
           python - <<'PY'
+          import hashlib
           import os
           from pathlib import Path
+          from uuid import uuid4
+
           import psycopg
 
           url = os.environ["MIGRATION_DATABASE_URL"]
+          tenant_a = "d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e"
+          tenant_b = "a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c"
+          embedding = "[" + ",".join(["1"] + ["0"] * 1535) + "]"
           with psycopg.connect(url, autocommit=True) as connection:
               connection.execute(
                   "CREATE ROLE app_runtime LOGIN PASSWORD 'app-test-password' NOSUPERUSER NOBYPASSRLS"
@@ -79,39 +83,59 @@ jobs:
                   "GRANT SELECT ON tenant_memberships TO app_runtime; "
                   "GRANT SELECT, INSERT ON audit_events TO app_runtime; "
                   "GRANT SELECT, INSERT, UPDATE ON outbox_events TO app_runtime; "
-                  "GRANT SELECT, INSERT, UPDATE ON provider_credentials TO app_runtime"
+                  "GRANT SELECT, INSERT, UPDATE ON provider_credentials TO app_runtime; "
+                  "GRANT USAGE ON TYPE vector TO app_runtime; "
+                  "GRANT SELECT, INSERT, UPDATE, DELETE ON rag_documents, rag_document_chunks TO app_runtime"
               )
               connection.execute(
-                  "INSERT INTO tenant_memberships (tenant_id, subject, role, status) VALUES "
-                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 'rls-user-a', 'member', 'active'), "
-                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 'rls-user-b', 'member', 'active')"
+                  "INSERT INTO tenant_memberships (tenant_id, issuer, subject, role, status) VALUES "
+                  "(%s, %s, 'rls-user-a', 'member', 'active'), "
+                  "(%s, %s, 'rls-user-b', 'member', 'active')",
+                  (tenant_a, "https://identity.example/", tenant_b, "https://identity.example/"),
               )
               connection.execute(
                   "INSERT INTO audit_events "
                   "(tenant_id, sequence, actor_subject, action, resource_type, resource_id, "
                   "request_id, payload, previous_hash, event_hash) VALUES "
-                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 1, 'user-a', 'test', 'test', "
-                  "'a', 'req-a', '{}'::jsonb, repeat('0', 64), repeat('1', 64)), "
-                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 1, 'user-b', 'test', 'test', "
-                  "'b', 'req-b', '{}'::jsonb, repeat('0', 64), repeat('2', 64))"
+                  "(%s, 1, 'user-a', 'test', 'test', 'a', 'req-a', '{}'::jsonb, repeat('0', 64), repeat('1', 64)), "
+                  "(%s, 1, 'user-b', 'test', 'test', 'b', 'req-b', '{}'::jsonb, repeat('0', 64), repeat('2', 64))",
+                  (tenant_a, tenant_b),
               )
               connection.execute(
                   "INSERT INTO outbox_events "
                   "(tenant_id, idempotency_key, event_type, aggregate_type, aggregate_id) VALUES "
-                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 'seed-a', 'test', 'test', 'a'), "
-                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 'seed-b', 'test', 'test', 'b')"
+                  "(%s, 'seed-a', 'test', 'test', 'a'), (%s, 'seed-b', 'test', 'test', 'b')",
+                  (tenant_a, tenant_b),
               )
               connection.execute(
                   "INSERT INTO provider_credentials "
                   "(tenant_id, provider_id, label, key_id, nonce, encrypted_secret, created_by) VALUES "
-                  "('d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e', 'openai', 'ci', 'ci', "
-                  "decode(repeat('00', 12), 'hex'), decode('01', 'hex'), 'user-a'), "
-                  "('a8e49d50-9f30-4bde-9c6f-4a7d84b0d21c', 'openai', 'ci', 'ci', "
-                  "decode(repeat('00', 12), 'hex'), decode('01', 'hex'), 'user-b')"
+                  "(%s, 'openai', 'ci', 'ci', decode(repeat('00', 12), 'hex'), decode('01', 'hex'), 'user-a'), "
+                  "(%s, 'openai', 'ci', 'ci', decode(repeat('00', 12), 'hex'), decode('01', 'hex'), 'user-b')",
+                  (tenant_a, tenant_b),
               )
+              for tenant_id, label, source_uri in (
+                  (tenant_a, "Tenant A RAG source", "urn:ci:tenant-a"),
+                  (tenant_b, "Tenant B RAG source", "urn:ci:tenant-b"),
+              ):
+                  document_id = uuid4()
+                  content = f"Private retrieval source for {label}."
+                  digest = hashlib.sha256(content.encode()).hexdigest()
+                  connection.execute(
+                      "INSERT INTO rag_documents "
+                      "(id, tenant_id, title, source_uri, source_type, embedding_model, content, content_sha256, metadata, created_by) "
+                      "VALUES (%s, %s, %s, %s, 'manual', 'fixture-embedding-v1', %s, %s, %s::jsonb, 'ci')",
+                      (document_id, tenant_id, label, source_uri, content, digest, '{"area":"ci"}'),
+                  )
+                  connection.execute(
+                      "INSERT INTO rag_document_chunks "
+                      "(id, tenant_id, document_id, ordinal, content, start_char, end_char, content_sha256, embedding) "
+                      "VALUES (%s, %s, %s, 0, %s, 0, %s, %s, %s::vector)",
+                      (uuid4(), tenant_id, document_id, content, len(content), digest, embedding),
+                  )
           PY
-      - name: PostgreSQL row-level security and immutable audit integration tests
+      - name: Full unit, API, security and PostgreSQL integration suite with coverage gate
         env:
           TEST_DATABASE_URL: postgresql://app_runtime:app-test-password@localhost:5432/ai_notebook_test
           TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_notebook_test
-        run: pytest -q tests/test_postgres_rls.py
+        run: pytest --cov=ai_notebook_api --cov-report=term-missing --cov-fail-under=85
