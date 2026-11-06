@@ -37,7 +37,7 @@ Apply SQL migrations in lexical order using a dedicated migration role:
 6. `migrations/0006_issuer_scoped_tenant_memberships.sql`
 7. `migrations/0007_rag_pgvector.sql`
 
-The RAG migration installs pgvector, creates 1536-dimensional document embeddings, a cosine HNSW index, a GIN full-text index, composite tenant/document foreign keys, and forced tenant RLS. The application runtime role must be a non-superuser, must not have `BYPASSRLS`, and must not own tenant tables.
+The RAG migration installs pgvector, creates 1536-dimensional document embeddings, a cosine HNSW index, a GIN full-text index, composite tenant/document foreign keys, and forced tenant RLS. The application runtime role must be a non-superuser, must not have `BYPASSRLS`, and must not own tenant tables. In staging and production, DATABASE_URL must use `sslmode=verify-full`; the API fails closed if this is missing or weakened.
 
 Grant only the privileges required by enabled features. For RAG retrieval and ingestion:
 
@@ -85,7 +85,7 @@ Enable only when the API, database, identity provider, and embedding provider ar
 ~~~bash
 MCP_ENABLED=true
 MCP_RESOURCE_SERVER_URL=https://api.example.com/mcp
-MCP_ALLOWED_HOSTS=api.example.com:443
+MCP_ALLOWED_HOSTS=api.example.com,api.example.com:443,api.example.com:*
 MCP_ALLOWED_ORIGINS=https://trusted-mcp-client.example
 ~~~
 
@@ -109,7 +109,7 @@ The Python API CI provisions PostgreSQL with pgvector, runs migrations under a m
 
 The versioned retrieval dataset is `tests/evaluation/rag_retrieval.json` (12 documents and 12 queries). For a live evaluation against the configured embedding endpoint and PostgreSQL, run the **RAG Live Retrieval Evaluation** GitHub Actions workflow. Configure these in the protected GitHub `staging` environment:
 
-- Secret `RAG_EVAL_DATABASE_URL`: PostgreSQL URL for a restricted non-superuser role with `NOBYPASSRLS`.
+- Secret `RAG_EVAL_DATABASE_URL`: PostgreSQL URL for a restricted non-superuser role with `NOBYPASSRLS` and `sslmode=verify-full`.
 - Secret `EMBEDDING_API_URL`.
 - Secret `EMBEDDING_API_KEY`.
 - Repository variable `EMBEDDING_MODEL`.
