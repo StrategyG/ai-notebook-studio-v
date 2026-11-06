@@ -44,6 +44,18 @@ def _assert_restricted_runtime_role(session: Session) -> None:
     if role is None or bool(role.rolsuper) or bool(role.rolbypassrls):
         raise RuntimeError("retrieval evaluation requires a non-superuser NOBYPASSRLS database role")
 
+    owns_tenant_tables = session.execute(
+        text(
+            "SELECT EXISTS ("
+            "SELECT 1 FROM pg_class "
+            "WHERE oid IN (to_regclass('rag_documents'), to_regclass('rag_document_chunks')) "
+            "AND relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)"
+            ")"
+        )
+    ).scalar_one()
+    if owns_tenant_tables:
+        raise RuntimeError("retrieval evaluation role must not own tenant RAG tables")
+
     rls = session.execute(
         text(
             "SELECT count(*) FROM pg_class "
@@ -171,6 +183,7 @@ async def evaluate() -> int:
         passed = all(measured[name] >= targets[name] for name in targets)
         report = {
             "dataset_version": dataset["dataset_version"],
+            "embedding_model": settings.embedding_model,
             "tenant_id": str(tenant_id),
             "query_count": len(metric_rows),
             "citation_count": citation_count,
