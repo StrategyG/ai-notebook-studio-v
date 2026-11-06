@@ -49,7 +49,7 @@ GRANT USAGE ON TYPE vector TO app_runtime;
 GRANT SELECT, INSERT ON rag_documents, rag_document_chunks TO app_runtime;
 ~~~
 
-Do not grant the application role ownership of these tables or BYPASSRLS. Do not connect browser clients directly to this database.
+Do not grant the application role ownership of these tables or BYPASSRLS. In staging and production, the database URL must use `sslmode=verify-full`; the settings validator rejects weaker TLS modes. Do not connect browser clients directly to this database.
 
 The schema is pinned to 1536-dimensional vectors. If the selected RUSA-AI or external embedding model returns a different dimension, do not override the environment variable alone: change the vector typmod, index, model, and integration fixtures together in a reviewed migration.
 
