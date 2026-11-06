@@ -50,3 +50,34 @@ def test_enabled_rag_fails_closed_when_embedding_endpoint_is_invalid() -> None:
         validate_rag_configuration(
             _settings(embedding_api_url="https://embedding.example/v1/chat/completions")
         )
+
+
+
+def test_staging_and_production_require_postgres_verify_full_tls() -> None:
+    verified_url = "postgresql://rag_user:secret@db.example:5432/notebook?sslmode=verify-full"
+    assert _settings(app_env="staging", database_url=verified_url).persistence_configured is True
+    assert _settings(app_env="production", database_url=verified_url).persistence_configured is True
+
+    for url in (
+        "postgresql://rag_user:secret@db.example:5432/notebook",
+        "postgresql://rag_user:secret@db.example:5432/notebook?sslmode=require",
+        "postgresql://rag_user:secret@db.example:5432/notebook?sslmode=verify-ca",
+    ):
+        assert _settings(app_env="production", database_url=url).persistence_configured is False
+
+
+def test_development_can_use_local_postgres_without_tls() -> None:
+    assert _settings(
+        app_env="development",
+        database_url="postgresql://localhost:5432/notebook",
+    ).persistence_configured is True
+
+
+def test_enabled_rag_fails_closed_without_verified_database_tls() -> None:
+    with pytest.raises(RuntimeError, match="sslmode=verify-full"):
+        validate_rag_configuration(
+            _settings(
+                app_env="production",
+                database_url="postgresql://rag_user:secret@db.example:5432/notebook?sslmode=require",
+            )
+        )
