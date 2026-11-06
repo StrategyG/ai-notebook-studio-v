@@ -4,7 +4,7 @@
 
 This branch adds a tenant-scoped PostgreSQL RAG path and a separately authenticated MCP Streamable HTTP resource server.
 
-The API ingests extracted UTF-8 text and provides a bounded multipart upload route for PDF, DOCX, HTML, Markdown, and UTF-8 TXT. Upload parsing is size-limited, does not execute embedded content, and does not write uploaded files to disk. The API does not fetch arbitrary URLs; a URL source URI is provenance for already-extracted text, not an instruction to crawl the network.
+The API ingests extracted UTF-8 text and provides a bounded multipart upload route for PDF, DOCX, HTML, Markdown, and UTF-8 TXT. Upload parsing is size-limited and does not execute embedded content. The RAG service does not persist original binary files; it records the raw-file SHA-256, filename, parser, and media type alongside the extracted text. Starlette may temporarily spool multipart data, so production must provide an isolated, size-bounded temporary directory with appropriate filesystem protections and cleanup. The API does not fetch arbitrary URLs; a URL source URI is provenance for already-extracted text, not an instruction to crawl the network.
 
 ## Components
 
