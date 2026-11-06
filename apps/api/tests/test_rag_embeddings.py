@@ -102,3 +102,26 @@ async def test_embedding_client_fails_closed_without_configuration() -> None:
     client = OpenAICompatibleEmbeddingClient(Settings())
     with pytest.raises(EmbeddingServiceError, match="not configured"):
         await client.embed(["one document"])
+
+
+@pytest.mark.asyncio
+async def test_embedding_client_rejects_boolean_item_indices() -> None:
+    vector = [0.1] * DIMENSIONS
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"index": True, "embedding": vector},
+                    {"index": 0, "embedding": vector},
+                ]
+            },
+        )
+
+    client = OpenAICompatibleEmbeddingClient(
+        embedding_settings(),
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(EmbeddingServiceError, match="ordering"):
+        await client.embed(["first document", "second document"])
