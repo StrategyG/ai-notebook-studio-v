@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
-from ai_notebook_api.core.config import get_settings
+from ai_notebook_api.api.health import _database_health
+from ai_notebook_api.core.config import Settings, get_settings
 from ai_notebook_api.main import app
 
 client = TestClient(app)
@@ -164,3 +165,20 @@ def test_readiness_fails_when_runtime_table_privileges_are_missing(monkeypatch):
     assert response.status_code == 503
     assert response.json()["checks"]["database_required_privileges_present"] is False
     get_settings.cache_clear()
+
+
+def test_database_health_fails_closed_without_database_configuration():
+    assert _database_health(Settings()) == (False, False, False, False, False)
+
+
+def test_database_health_fails_closed_when_database_connection_raises(monkeypatch):
+    class BrokenEngine:
+        def connect(self):
+            raise RuntimeError("connection failure")
+
+    monkeypatch.setattr(
+        "ai_notebook_api.api.health.get_engine",
+        lambda _database_url: BrokenEngine(),
+    )
+    settings = Settings(database_url="postgresql://user:pass@localhost:5432/app")
+    assert _database_health(settings) == (False, False, False, False, False)
