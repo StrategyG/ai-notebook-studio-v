@@ -17,12 +17,13 @@ from ai_notebook_api.security.auth import (
 
 client = TestClient(app)
 TENANT_ID = "d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e"
+OIDC_ISSUER = "https://identity.example/"
 
 
 def configured_settings() -> Settings:
     return Settings(
         auth_jwks_url="https://identity.example/.well-known/jwks.json",
-        auth_issuer="https://identity.example/",
+        auth_issuer=OIDC_ISSUER,
         auth_audience="ai-notebook-api",
         auth_algorithms=("RS256",),
     )
@@ -40,7 +41,7 @@ def test_identity_endpoint_is_unavailable_when_auth_is_not_configured(monkeypatc
 
 def test_identity_endpoint_requires_bearer_token(monkeypatch) -> None:
     monkeypatch.setenv("AUTH_JWKS_URL", "https://identity.example/jwks")
-    monkeypatch.setenv("AUTH_ISSUER", "https://identity.example/")
+    monkeypatch.setenv("AUTH_ISSUER", OIDC_ISSUER)
     monkeypatch.setenv("AUTH_AUDIENCE", "ai-notebook-api")
     get_settings.cache_clear()
     response = client.get("/api/v1/me")
@@ -72,6 +73,7 @@ def test_verifier_uses_allowlisted_algorithm_and_required_claim_validation(monke
         assert token == "signed-token"
         assert key == "verified-public-key"
         return {
+            "iss": OIDC_ISSUER,
             "sub": "user-123",
             "tenant_id": TENANT_ID,
             "roles": ["member"],
@@ -83,13 +85,14 @@ def test_verifier_uses_allowlisted_algorithm_and_required_claim_validation(monke
     auth._jwks_client.cache_clear()
 
     assert principal == Principal(
+        issuer=OIDC_ISSUER,
         subject="user-123",
         tenant_id=UUID(TENANT_ID),
         roles=frozenset({"member"}),
         scopes=frozenset({"notebooks:read", "agents:run"}),
     )
     assert observed["algorithms"] == ["RS256"]
-    assert observed["issuer"] == "https://identity.example/"
+    assert observed["issuer"] == OIDC_ISSUER
     assert observed["audience"] == "ai-notebook-api"
     assert set(observed["options"]["require"]) == {"exp", "iss", "aud", "sub"}
 
@@ -115,7 +118,7 @@ def test_verifier_requires_tenant_claim(monkeypatch) -> None:
         "decode",
         lambda *_args, **_kwargs: {
             "sub": "user-123",
-            "iss": "https://identity.example/",
+            "iss": OIDC_ISSUER,
             "aud": "ai-notebook-api",
             "exp": 2_000_000_000,
         },
@@ -124,9 +127,35 @@ def test_verifier_requires_tenant_claim(monkeypatch) -> None:
         verify_access_token("signed-token", configured_settings())
 
 
+def test_verifier_rejects_issuer_not_matching_configured_provider(monkeypatch) -> None:
+    class FakeSigningKey:
+        key = "public-key"
+
+    class FakeJwksClient:
+        def get_signing_key_from_jwt(self, _token):
+            return FakeSigningKey()
+
+    monkeypatch.setattr(auth, "_jwks_client", lambda _url: FakeJwksClient())
+    monkeypatch.setattr(jwt, "get_unverified_header", lambda _token: {"alg": "RS256"})
+    monkeypatch.setattr(
+        jwt,
+        "decode",
+        lambda *_args, **_kwargs: {
+            "sub": "user-123",
+            "iss": "https://other-identity.example/",
+            "aud": "ai-notebook-api",
+            "exp": 2_000_000_000,
+            "tenant_id": TENANT_ID,
+        },
+    )
+    with pytest.raises(TokenVerificationError, match="issuer"):
+        verify_access_token("signed-token", configured_settings())
+
+
 def test_scope_dependency_rejects_missing_scope() -> None:
     dependency = require_scopes("notebooks:write")
     principal = Principal(
+        issuer=OIDC_ISSUER,
         subject="user-123",
         tenant_id=UUID(TENANT_ID),
         roles=frozenset({"member"}),
