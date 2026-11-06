@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import io
-import zipfile
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from io import BytesIO
 from pathlib import PurePosixPath
+from zipfile import BadZipFile, ZipFile
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 1_000_000
@@ -69,7 +69,7 @@ def _bounded_text(value: str, *, parser: str, media_type: str) -> ExtractedDocum
 
 def _extract_docx(data: bytes, media_type: str) -> ExtractedDocument:
     try:
-        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        with ZipFile(BytesIO(data)) as archive:
             members = archive.infolist()
             if len(members) > MAX_DOCX_ENTRIES:
                 raise DocumentParseError("DOCX archive contains too many entries")
@@ -82,13 +82,13 @@ def _extract_docx(data: bytes, media_type: str) -> ExtractedDocument:
                     raise DocumentParseError("DOCX archive contains an unsafe path")
             if "[Content_Types].xml" not in {member.filename for member in members}:
                 raise DocumentParseError("The uploaded file is not a valid DOCX document")
-    except (zipfile.BadZipFile, OSError) as exc:
+    except (BadZipFile, OSError) as exc:
         raise DocumentParseError("The uploaded DOCX document is malformed") from exc
 
     try:
         from docx import Document
 
-        document = Document(io.BytesIO(data))
+        document = Document(BytesIO(data))
         parts = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
         for table in document.tables:
             for row in table.rows:
