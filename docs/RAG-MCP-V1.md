@@ -79,7 +79,7 @@ MCP_ALLOWED_HOSTS=api.example.com:443
 MCP_ALLOWED_ORIGINS=https://trusted-mcp-client.example
 ~~~
 
-The MCP endpoint uses the official Python MCP SDK Streamable HTTP transport. It acts as a resource server: it verifies the same signed access token as the API, requires the rag:search scope, and does not issue tokens. The issuer and audience are checked by the existing JWT/JWKS verifier. The SDK's resource-URL comparison is disabled because this identity provider uses its own audience identifier; the configured AUTH_AUDIENCE is still verified.
+The MCP endpoint uses the official Python MCP SDK Streamable HTTP transport. It acts as a resource server: it verifies the same signed access token as the API and does not issue tokens. The gateway requires the mcp:tools:call scope; rag_search additionally requires rag:search, and rag_get_document additionally requires documents:read. The issuer and audience are checked by the existing JWT/JWKS verifier. The SDK's resource-URL comparison is disabled because this identity provider uses its own audience identifier; the configured AUTH_AUDIENCE is still verified.
 
 Only these read-only tools are registered:
 
