@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from ai_notebook_api.core.config import Settings
 from ai_notebook_api.main import app
 from ai_notebook_api.mcp_server import MCP_ALLOWED_TOOLS, JWTTokenVerifier, build_mcp_server
-from ai_notebook_api.security.auth import Principal
+from ai_notebook_api.security.auth import Principal, TokenVerificationError
 
 
 def configured_mcp_settings() -> Settings:
@@ -38,7 +38,7 @@ async def test_mcp_token_verifier_maps_only_verified_issuer_scoped_identity(monk
     monkeypatch.setattr(
         "ai_notebook_api.mcp_server.verify_access_token",
         lambda token, _settings: principal if token == "valid-token" else (_ for _ in ()).throw(
-            ValueError("invalid token")
+            TokenVerificationError("invalid token")
         ),
     )
     verifier = JWTTokenVerifier(configured_mcp_settings())
@@ -58,8 +58,6 @@ async def test_mcp_token_verifier_maps_only_verified_issuer_scoped_identity(monk
 
 @pytest.mark.asyncio
 async def test_mcp_token_verifier_rejects_invalid_tokens(monkeypatch) -> None:
-    from ai_notebook_api.security.auth import TokenVerificationError
-
     monkeypatch.setattr(
         "ai_notebook_api.mcp_server.verify_access_token",
         lambda _token, _settings: (_ for _ in ()).throw(TokenVerificationError("invalid")),
@@ -86,9 +84,19 @@ def test_mcp_configuration_fails_closed_without_host_allowlist() -> None:
             if field != "mcp_allowed_hosts"
         }
     )
-    server, asgi_app = build_mcp_server(settings)
-    assert server is None
-    assert asgi_app is None
+    with pytest.raises(RuntimeError, match="configuration is incomplete"):
+        build_mcp_server(settings)
+
+
+def test_mcp_http_endpoint_requires_bearer_authentication() -> None:
+    server, asgi_app = build_mcp_server(configured_mcp_settings())
+    assert server is not None
+    assert asgi_app is not None
+
+    with TestClient(asgi_app) as client:
+        response = client.post("/mcp", headers={"Host": "testserver:80"}, json={})
+
+    assert response.status_code == 401
 
 
 def test_disabled_mcp_endpoint_returns_service_unavailable() -> None:
