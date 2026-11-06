@@ -93,6 +93,9 @@ def _open_authorized_session(
             raise PermissionError("Tool permission denied")
         if not required_scopes.issubset(set(token.scopes)):
             raise PermissionError("Required MCP scope is missing")
+        # Do not hold a database connection while a tool waits on the embedding API.
+        # RAGService re-establishes app.tenant_id before its next SQL statement.
+        session.commit()
         return session, membership
     except (TenantAuthorizationError, PermissionError):
         session.close()
