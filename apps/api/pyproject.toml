@@ -1,6 +1,6 @@
 [project]
 name = "ai-notebook-studio-api"
-version = "0.4.0"
+version = "0.5.0"
 description = "Modular API foundation for AI Notebook Studio V6"
 requires-python = ">=3.12,<3.14"
 dependencies = [
@@ -12,6 +12,9 @@ dependencies = [
   "httpx>=0.28,<1.0",
   "pgvector>=0.4,<1.0",
   "mcp>=2.0,<3.0",
+  "python-multipart>=0.0.20,<1.0",
+  "pypdf>=6.0,<7.0",
+  "python-docx>=1.2,<2.0",
   "uvicorn[standard]>=0.48,<1.0",
 ]
 
