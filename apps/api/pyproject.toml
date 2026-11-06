@@ -1,6 +1,6 @@
 [project]
 name = "ai-notebook-studio-api"
-version = "0.3.0"
+version = "0.4.0"
 description = "Modular API foundation for AI Notebook Studio V6"
 requires-python = ">=3.12,<3.14"
 dependencies = [
@@ -9,6 +9,9 @@ dependencies = [
   "PyJWT[crypto]>=2.10,<3.0",
   "SQLAlchemy>=2.0,<3.0",
   "psycopg[binary]>=3.2,<4.0",
+  "httpx>=0.28,<1.0",
+  "pgvector>=0.4,<1.0",
+  "mcp>=2.0,<3.0",
   "uvicorn[standard]>=0.48,<1.0",
 ]
 
