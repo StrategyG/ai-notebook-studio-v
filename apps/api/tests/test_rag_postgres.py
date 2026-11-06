@@ -90,6 +90,7 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
                 title="PostgreSQL hybrid retrieval",
                 source_uri=f"urn:rag-test:tenant-a:{tenant_a}",
                 source_type="manual",
+                embedding_model="fixture-embedding-v1",
                 content=service_content,
                 metadata={"classification": "internal", "topic": "database"},
                 embedder=FixedEmbeddingProvider(),
