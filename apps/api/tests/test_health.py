@@ -238,3 +238,17 @@ def test_database_health_rejects_missing_core_tables_and_missing_privileges(monk
 
 def test_database_health_returns_false_when_persistence_is_not_configured() -> None:
     assert health._database_health(Settings()) == (False, False, False, False, False)
+
+
+
+def test_database_health_does_not_require_pgvector_when_rag_is_disabled(monkeypatch) -> None:
+    connection = FakeConnection(
+        tables=["tenant_memberships", "audit_events", "outbox_events", "provider_credentials"]
+    )
+    monkeypatch.setattr(health, "get_engine", lambda _url: FakeEngine(connection))
+    settings = Settings(
+        database_url="postgresql://runtime:secret@db.example:5432/notebook",
+        rag_enabled=False,
+    )
+
+    assert health._database_health(settings) == (True, True, True, True, True)
