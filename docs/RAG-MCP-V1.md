@@ -41,7 +41,7 @@ Apply migrations in lexical order:
 - 0006_issuer_scoped_tenant_memberships.sql
 - 0007_rag_pgvector.sql
 
-The RAG migration installs the vector extension, creates the document and chunk tables, a cosine HNSW index, a GIN full-text index, and forced tenant RLS policies. The runtime role must be a non-superuser without BYPASSRLS. Grant it only the required table privileges:
+The RAG migration installs the vector extension, creates the document and chunk tables, a cosine HNSW index, a GIN full-text index, and forced tenant RLS policies. The runtime role must be a non-superuser without BYPASSRLS. Staging and production DATABASE_URL values must include sslmode=verify-full; the API refuses to enable RAG without this verified TLS mode. Grant it only the required table privileges:
 
 ~~~sql
 GRANT USAGE ON SCHEMA public TO app_runtime;
@@ -77,7 +77,7 @@ Enable MCP only after the API identity provider, PostgreSQL, RAG schema, embeddi
 ~~~bash
 MCP_ENABLED=true
 MCP_RESOURCE_SERVER_URL=https://api.example.com/mcp
-MCP_ALLOWED_HOSTS=api.example.com:443
+MCP_ALLOWED_HOSTS=api.example.com,api.example.com:443,api.example.com:*
 MCP_ALLOWED_ORIGINS=https://trusted-mcp-client.example
 ~~~
 
