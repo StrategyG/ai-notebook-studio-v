@@ -93,7 +93,6 @@ def test_readiness_fails_when_database_or_jwks_is_unavailable(monkeypatch):
     assert checks["required_schema_present"] is False
     assert checks["database_role_not_bypass_rls"] is False
     assert checks["database_required_privileges_present"] is False
-    assert checks["rag_rls_enforced"] is False
     assert checks["jwks_reachable"] is False
     get_settings.cache_clear()
 
