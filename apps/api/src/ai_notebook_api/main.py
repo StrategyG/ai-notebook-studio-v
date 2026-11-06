@@ -17,11 +17,11 @@ from ai_notebook_api.core.config import (
     validate_ugai_configuration,
 )
 from ai_notebook_api.mcp_server import build_mcp_server
-from ai_notebook_api.upload_limits import UploadBodyLimitMiddleware
 from ai_notebook_api.services.ugai_client import (
     OAuthTokenExchangeProvider,
     UGAITaskClient,
 )
+from ai_notebook_api.upload_limits import UploadBodyLimitMiddleware
 
 _mcp_server, _mcp_asgi_app = build_mcp_server(get_settings())
 
