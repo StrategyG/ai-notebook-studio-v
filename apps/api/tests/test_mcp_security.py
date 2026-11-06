@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -5,10 +6,12 @@ from fastapi.testclient import TestClient
 from mcp.client import Client
 from mcp.server.auth.provider import AccessToken
 
+from ai_notebook_api import mcp_server
 from ai_notebook_api.core.config import Settings
 from ai_notebook_api.main import app
 from ai_notebook_api.mcp_server import (
     MCP_ALLOWED_TOOLS,
+    _open_authorized_session,
     JWTTokenVerifier,
     _register_allowlisted_tool,
     _validate_required_scopes,
@@ -186,3 +189,180 @@ def test_mcp_tools_require_their_own_narrow_token_scopes() -> None:
         _validate_required_scopes(document_token, {"rag:search"})
     with pytest.raises(ValueError, match="at least one"):
         _validate_required_scopes(search_token, set())
+
+
+
+def _verified_access_token(*, scopes: list[str] | None = None) -> AccessToken:
+    return AccessToken(
+        token="verified-test-token",
+        client_id="https://identity.example/|user-1",
+        subject="user-1",
+        scopes=scopes or ["mcp:tools:call", "rag:search", "documents:read"],
+        claims={
+            "iss": "https://identity.example/",
+            "sub": "user-1",
+            "tenant_id": "d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e",
+        },
+    )
+
+
+class FakeMcpSession:
+    def __init__(self):
+        self.committed = False
+        self.closed = False
+
+    def commit(self):
+        self.committed = True
+
+    def close(self):
+        self.closed = True
+
+
+def _patch_mcp_session(monkeypatch, *, role: str = "viewer"):
+    sessions: list[FakeMcpSession] = []
+    membership = SimpleNamespace(
+        tenant_id=UUID("d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e"),
+        subject="user-1",
+        role=role,
+    )
+
+    def factory(**_kwargs):
+        def create_session():
+            session = FakeMcpSession()
+            sessions.append(session)
+            return session
+
+        return create_session
+
+    monkeypatch.setattr(mcp_server, "get_engine", lambda _url: object())
+    monkeypatch.setattr(mcp_server, "sessionmaker", factory)
+    monkeypatch.setattr(mcp_server, "resolve_active_membership", lambda *_args, **_kwargs: membership)
+    return sessions, membership
+
+
+def test_mcp_authorized_session_fails_closed_without_access_token(monkeypatch) -> None:
+    monkeypatch.setattr(mcp_server, "get_access_token", lambda: None)
+
+    with pytest.raises(PermissionError, match="Authentication required"):
+        _open_authorized_session(
+            configured_mcp_settings(),
+            {"mcp:tools:call", "rag:search"},
+            {"rag:search"},
+        )
+
+
+@pytest.mark.parametrize(
+    "claims",
+    [
+        {},
+        {"iss": "https://identity.example/", "sub": "user-1"},
+        {"iss": "", "sub": "user-1", "tenant_id": "d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e"},
+        {"iss": "https://identity.example/", "sub": "", "tenant_id": "d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e"},
+        {"iss": "https://identity.example/", "sub": "user-1", "tenant_id": "not-a-uuid"},
+    ],
+)
+def test_mcp_authorized_session_rejects_unverified_or_malformed_tenant_identity(
+    monkeypatch, claims
+) -> None:
+    token = AccessToken(
+        token="verified-test-token",
+        client_id="identity|user",
+        subject=claims.get("sub"),
+        scopes=["mcp:tools:call", "rag:search"],
+        claims=claims,
+    )
+    monkeypatch.setattr(mcp_server, "get_access_token", lambda: token)
+
+    with pytest.raises(PermissionError, match="identity"):
+        _open_authorized_session(
+            configured_mcp_settings(),
+            {"mcp:tools:call", "rag:search"},
+            {"rag:search"},
+        )
+
+
+def test_mcp_authorized_session_rejects_unconfigured_database(monkeypatch) -> None:
+    monkeypatch.setattr(mcp_server, "get_access_token", lambda: _verified_access_token())
+
+    with pytest.raises(RuntimeError, match="persistence"):
+        _open_authorized_session(
+            Settings(),
+            {"mcp:tools:call", "rag:search"},
+            {"rag:search"},
+        )
+
+
+def test_mcp_authorized_session_checks_database_role_and_token_scopes(monkeypatch) -> None:
+    sessions, _membership = _patch_mcp_session(monkeypatch)
+    monkeypatch.setattr(mcp_server, "get_access_token", lambda: _verified_access_token())
+
+    session, membership = _open_authorized_session(
+        configured_mcp_settings(),
+        {"mcp:tools:call", "rag:search"},
+        {"rag:search"},
+    )
+
+    assert membership.role == "viewer"
+    assert session.committed is True
+    assert session.closed is False
+
+    with pytest.raises(PermissionError, match="permission"):
+        _open_authorized_session(
+            configured_mcp_settings(),
+            {"documents:write"},
+            {"documents:read"},
+        )
+    assert sessions[-1].closed is True
+
+    monkeypatch.setattr(
+        mcp_server,
+        "get_access_token",
+        lambda: _verified_access_token(scopes=["mcp:tools:call"]),
+    )
+    with pytest.raises(PermissionError, match="scope"):
+        _open_authorized_session(
+            configured_mcp_settings(),
+            {"mcp:tools:call", "rag:search"},
+            {"rag:search"},
+        )
+    assert sessions[-1].closed is True
+    session.close()
+
+
+@pytest.mark.asyncio
+async def test_mcp_search_and_document_tools_use_authorized_tenant_session(monkeypatch) -> None:
+    sessions, _membership = _patch_mcp_session(monkeypatch)
+    monkeypatch.setattr(mcp_server, "get_access_token", lambda: _verified_access_token())
+
+    class FakeRAGService:
+        def __init__(self, _session, *, tenant_id, actor_subject):
+            assert tenant_id == UUID("d2719d9a-3b0a-4b8a-a95b-1a8a1efc7f8e")
+            assert actor_subject == "user-1"
+
+        async def search(self, **kwargs):
+            assert kwargs["query"] == "tenant isolation"
+            assert kwargs["embedding_model"] == "test-model"
+            return {"query": kwargs["query"], "results": [], "citations": []}
+
+        def get_document(self, document_id):
+            return {"document_id": str(document_id), "content_hash_valid": True}
+
+    monkeypatch.setattr(mcp_server, "RAGService", FakeRAGService)
+    monkeypatch.setattr(mcp_server, "OpenAICompatibleEmbeddingClient", lambda _settings: object())
+    server, _asgi_app = build_mcp_server(configured_mcp_settings())
+    assert server is not None
+
+    async with Client(server) as client:
+        search_result = await client.call_tool(
+            "rag_search",
+            {"query": "tenant isolation", "limit": 3, "metadata_filter": {"area": "security"}},
+        )
+        document_result = await client.call_tool(
+            "rag_get_document",
+            {"document_id": "d9d50c4a-5c50-4bb6-bfa0-7e9d00c33c12"},
+        )
+
+    assert search_result.isError is not True
+    assert document_result.isError is not True
+    assert len(sessions) == 2
+    assert all(session.committed and session.closed for session in sessions)
