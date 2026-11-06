@@ -87,7 +87,6 @@ jobs:
           tests/test_rag_upload_api.py
           tests/test_tenant_authorization.py
           tests/test_upload_limits.py
-          tests/test_upload_limits.py
       - name: Confirm PostgreSQL runtime role cannot bypass RLS
         env:
           PGPASSWORD: rag_runtime
