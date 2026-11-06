@@ -41,7 +41,7 @@ async def upload_document(
         raw_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
         if len(raw_bytes) > MAX_UPLOAD_BYTES:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail={"code": "document_upload_too_large", "max_bytes": MAX_UPLOAD_BYTES},
             )
 
@@ -75,10 +75,10 @@ async def upload_document(
         return result
     except DocumentParseError as exc:
         session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except ValueError as exc:
         session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except EmbeddingServiceError as exc:
         session.rollback()
         raise HTTPException(
