@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import zipfile
+
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import PurePosixPath
