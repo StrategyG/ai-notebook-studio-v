@@ -4,8 +4,10 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from ai_notebook_api.db.session import apply_tenant_database_context
 from ai_notebook_api.rag.service import RAGService
 
 DATABASE_URL = os.getenv("TEST_DATABASE_URL")
@@ -74,6 +76,15 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
             )
 
         with Session(runtime_engine) as session:
+            role = session.execute(
+                text(
+                    "SELECT rolsuper, rolbypassrls FROM pg_roles "
+                    "WHERE rolname = current_user"
+                )
+            ).one()
+            assert role.rolsuper is False
+            assert role.rolbypassrls is False
+
             service = RAGService(session, tenant_id=tenant_a, actor_subject="rag-test-user")
             first = await service.ingest_document(
                 title="PostgreSQL hybrid retrieval",
@@ -127,6 +138,52 @@ async def test_postgres_ingestion_hybrid_search_citations_and_tenant_isolation()
             assert document["content_hash_valid"] is True
             assert document["content"] == service_content
 
+            # Explicit cross-tenant reads remain invisible with tenant A context.
+            cross_tenant_rows = session.execute(
+                text("SELECT id FROM rag_documents WHERE tenant_id = :tenant_id"),
+                {"tenant_id": tenant_b},
+            ).all()
+            assert cross_tenant_rows == []
+            assert service.get_document(document_b) is None
+
+            updated = session.execute(
+                text(
+                    "UPDATE rag_documents SET title = 'tampered' "
+                    "WHERE tenant_id = :tenant_id"
+                ),
+                {"tenant_id": tenant_b},
+            )
+            deleted = session.execute(
+                text("DELETE FROM rag_documents WHERE tenant_id = :tenant_id"),
+                {"tenant_id": tenant_b},
+            )
+            assert updated.rowcount == 0
+            assert deleted.rowcount == 0
+
+        # A runtime role cannot insert into another tenant by supplying its ID.
+        with Session(runtime_engine) as session:
+            apply_tenant_database_context(session, str(tenant_a))
+            with pytest.raises(DBAPIError):
+                session.execute(
+                    text(
+                        "INSERT INTO rag_documents "
+                        "(id, tenant_id, title, source_uri, source_type, embedding_model, content, "
+                        "content_sha256, metadata, created_by) "
+                        "VALUES (:id, :tenant_id, 'forbidden', :source_uri, 'manual', "
+                        "'fixture-embedding-v1', :content, :content_sha256, '{}'::jsonb, 'attacker')"
+                    ),
+                    {
+                        "id": uuid4(),
+                        "tenant_id": tenant_b,
+                        "source_uri": f"urn:rag-test:forbidden:{tenant_b}",
+                        "content": "cross tenant write must fail",
+                        "content_sha256": hashlib.sha256(b"cross tenant write must fail").hexdigest(),
+                    },
+                )
+                session.commit()
+            session.rollback()
+
+        # Missing tenant context is also fail-closed.
         with Session(runtime_engine) as session:
             visible = session.execute(
                 text("SELECT id FROM rag_documents WHERE tenant_id = :tenant_id"),
