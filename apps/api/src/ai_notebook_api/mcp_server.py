@@ -54,6 +54,7 @@ class JWTTokenVerifier(TokenVerifier):
 def _open_authorized_session(
     settings: Settings,
     required_permissions: set[str],
+    required_scopes: set[str],
 ) -> tuple[Session, Any]:
     token = get_access_token()
     if token is None:
@@ -90,7 +91,7 @@ def _open_authorized_session(
         granted = TENANT_ROLE_PERMISSIONS.get(membership.role, frozenset())
         if not required_permissions.issubset(granted):
             raise PermissionError("Tool permission denied")
-        if "rag:search" not in token.scopes:
+        if not required_scopes.issubset(set(token.scopes)):
             raise PermissionError("Required MCP scope is missing")
         return session, membership
     except (TenantAuthorizationError, PermissionError):
@@ -111,7 +112,7 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
         auth=AuthSettings(
             issuer_url=AnyHttpUrl(settings.auth_issuer or ""),
             resource_server_url=AnyHttpUrl(settings.mcp_resource_server_url or ""),
-            required_scopes=["rag:search"],
+            required_scopes=[],
             # The configured issuer uses its own audience identifier. The JWT verifier
             # validates AUTH_AUDIENCE; resource metadata still advertises the MCP URL.
             validate_token_resource=False,
@@ -130,6 +131,7 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
         session, membership = _open_authorized_session(
             settings,
             {"mcp:tools:call", "rag:search"},
+            {"rag:search"},
         )
         try:
             service = RAGService(
@@ -159,6 +161,7 @@ def build_mcp_server(settings: Settings) -> tuple[MCPServer | None, Any | None]:
         session, membership = _open_authorized_session(
             settings,
             {"mcp:tools:call", "documents:read"},
+            {"documents:read"},
         )
         try:
             service = RAGService(
