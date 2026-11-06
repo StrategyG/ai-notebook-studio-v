@@ -82,6 +82,7 @@ jobs:
           tests/test_rag_evaluation.py
           tests/test_rag_postgres.py
           tests/test_rag_service_validation.py
+          tests/test_rag_upload_api.py
           tests/test_tenant_authorization.py
       - name: Confirm PostgreSQL runtime role cannot bypass RLS
         env:
