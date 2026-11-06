@@ -4,7 +4,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
-DO $
+DO $$
 DECLARE
     installed_version text;
 BEGIN
@@ -18,7 +18,7 @@ BEGIN
             COALESCE(installed_version, 'not installed');
     END IF;
 END
-$;
+$$;
 
 CREATE TABLE IF NOT EXISTS rag_documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
