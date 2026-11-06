@@ -80,6 +80,7 @@ jobs:
           tests/test_mcp_security.py
           tests/test_rag_api.py
           tests/test_rag_chunking.py
+          tests/test_rag_configuration.py
           tests/test_rag_embeddings.py
           tests/test_rag_evaluation.py
           tests/test_rag_postgres.py
