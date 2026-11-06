@@ -98,7 +98,13 @@ class OpenAICompatibleEmbeddingClient:
                 raise EmbeddingServiceError("embedding provider returned an invalid item")
             index = item.get("index", fallback_index)
             embedding = item.get("embedding")
-            if not isinstance(index, int) or index < 0 or index >= len(texts) or index in seen:
+            if (
+                isinstance(index, bool)
+                or not isinstance(index, int)
+                or index < 0
+                or index >= len(texts)
+                or index in seen
+            ):
                 raise EmbeddingServiceError("embedding provider returned invalid item ordering")
             if not isinstance(embedding, list) or len(embedding) != self.settings.embedding_dimensions:
                 raise EmbeddingServiceError("embedding provider returned an unexpected vector dimension")
