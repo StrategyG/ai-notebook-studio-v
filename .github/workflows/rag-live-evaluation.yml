@@ -1,0 +1,48 @@
+name: RAG Live Retrieval Evaluation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rag-live-evaluation-\${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  evaluate-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: staging
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      APP_ENV: staging
+      RAG_ENABLED: "true"
+      EMBEDDING_DIMENSIONS: "1536"
+      EMBEDDING_TIMEOUT_SECONDS: "30"
+      DATABASE_URL: \${{ secrets.RAG_EVAL_DATABASE_URL }}
+      EMBEDDING_API_URL: \${{ secrets.EMBEDDING_API_URL }}
+      EMBEDDING_API_KEY: \${{ secrets.EMBEDDING_API_KEY }}
+      EMBEDDING_MODEL: \${{ vars.EMBEDDING_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: apps/api/pyproject.toml
+      - name: Install API package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Validate staging evaluation secrets without printing values
+        run: |
+          test -n "$DATABASE_URL" || { echo "RAG_EVAL_DATABASE_URL is required in the staging environment"; exit 1; }
+          test -n "$EMBEDDING_API_URL" || { echo "EMBEDDING_API_URL is required in the staging environment"; exit 1; }
+          test -n "$EMBEDDING_API_KEY" || { echo "EMBEDDING_API_KEY is required in the staging environment"; exit 1; }
+          test -n "$EMBEDDING_MODEL" || { echo "EMBEDDING_MODEL repository variable is required"; exit 1; }
+      - name: Run live embedding and PostgreSQL hybrid retrieval evaluation
+        run: python scripts/evaluate_rag.py
