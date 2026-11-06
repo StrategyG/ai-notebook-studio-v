@@ -19,74 +19,10 @@ def liveness() -> dict[str, str]:
     return {"status": "alive"}
 
 
-def _rag_schema_present(connection) -> bool:
-    required_columns = {
-        ("rag_documents", "embedding_model"),
-        ("rag_document_chunks", "embedding"),
-        ("rag_document_chunks", "search_tsv"),
-    }
-    columns = set(
-        connection.execute(
-            text(
-                "SELECT table_name, column_name FROM information_schema.columns "
-                "WHERE table_schema = current_schema() AND "
-                "((table_name = 'rag_documents' AND column_name = 'embedding_model') OR "
-                "(table_name = 'rag_document_chunks' AND column_name IN ('embedding', 'search_tsv')))"
-            )
-        ).all()
-    )
-    if not required_columns.issubset(columns):
-        return False
-
-    vector_type = connection.execute(
-        text(
-            "SELECT format_type(a.atttypid, a.atttypmod) "
-            "FROM pg_attribute a "
-            "WHERE a.attrelid = to_regclass('rag_document_chunks') "
-            "AND a.attname = 'embedding' AND NOT a.attisdropped"
-        )
-    ).scalar_one_or_none()
-    if vector_type != "vector(1536)":
-        return False
-
-    required_indexes = {"ix_rag_chunks_embedding_hnsw", "ix_rag_chunks_search_tsv"}
-    indexes = set(
-        connection.execute(
-            text(
-                "SELECT indexname FROM pg_indexes "
-                "WHERE schemaname = current_schema() AND tablename = 'rag_document_chunks' "
-                "AND indexname IN ('ix_rag_chunks_embedding_hnsw', 'ix_rag_chunks_search_tsv')"
-            )
-        ).scalars()
-    )
-    if not required_indexes.issubset(indexes):
-        return False
-
-    rls_tables = connection.execute(
-        text(
-            "SELECT relname, relrowsecurity, relforcerowsecurity "
-            "FROM pg_class "
-            "WHERE oid IN (to_regclass('rag_documents'), to_regclass('rag_document_chunks'))"
-        )
-    ).all()
-    if len(rls_tables) != 2 or any(not row.relrowsecurity or not row.relforcerowsecurity for row in rls_tables):
-        return False
-
-    policy_count = connection.execute(
-        text(
-            "SELECT count(*) FROM pg_policies "
-            "WHERE schemaname = current_schema() AND "
-            "((tablename = 'rag_documents' AND policyname = 'rag_documents_tenant_isolation') OR "
-            "(tablename = 'rag_document_chunks' AND policyname = 'rag_document_chunks_tenant_isolation'))"
-        )
-    ).scalar_one()
-    return int(policy_count) == 2
-
-
-def _database_health(settings: Settings) -> tuple[bool, bool]:
-    """Check connectivity and schema needed by the enabled persistence features."""
+def _database_health(settings: Settings) -> tuple[bool, bool, bool, bool]:
+    """Check connectivity, schema, non-bypass runtime role, and tenant RLS policies."""
     if not settings.persistence_configured or not settings.database_url:
-        return False, False
+        return False, False, False, False
     try:
         engine = get_engine(settings.database_url)
         with engine.connect() as connection:
@@ -111,27 +47,98 @@ def _database_health(settings: Settings) -> tuple[bool, bool]:
             if settings.rag_enabled:
                 required_tables.update({"rag_documents", "rag_document_chunks"})
             schema_present = required_tables.issubset(table_names) and "issuer" in membership_columns
+
+            role = connection.execute(
+                text(
+                    "SELECT rolsuper, rolbypassrls FROM pg_roles "
+                    "WHERE rolname = current_user"
+                )
+            ).mappings().first()
+            runtime_role_safe = (
+                role is not None
+                and not bool(role["rolsuper"])
+                and not bool(role["rolbypassrls"])
+            )
+
+            rag_rls_enforced = True
             if settings.rag_enabled:
                 vector_extension_present = connection.execute(
                     text("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')")
                 ).scalar_one()
-                schema_present = schema_present and bool(vector_extension_present)
-                schema_present = schema_present and _rag_schema_present(connection)
-        return True, schema_present
+                rag_columns = set(
+                    connection.execute(
+                        text(
+                            "SELECT column_name FROM information_schema.columns "
+                            "WHERE table_schema = current_schema() AND table_name = 'rag_documents'"
+                        )
+                    ).scalars()
+                )
+                schema_present = (
+                    schema_present
+                    and bool(vector_extension_present)
+                    and {"embedding_model", "metadata", "content_sha256"}.issubset(rag_columns)
+                )
+
+                protected_tables = connection.execute(
+                    text(
+                        """
+                        SELECT count(*) = 2
+                        FROM pg_class c
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE n.nspname = current_schema()
+                          AND c.relname IN ('rag_documents', 'rag_document_chunks')
+                          AND c.relrowsecurity
+                          AND c.relforcerowsecurity
+                          AND EXISTS (
+                              SELECT 1
+                              FROM pg_policies p
+                              WHERE p.schemaname = n.nspname
+                                AND p.tablename = c.relname
+                                AND p.policyname = CASE c.relname
+                                    WHEN 'rag_documents' THEN 'rag_documents_tenant_isolation'
+                                    ELSE 'rag_document_chunks_tenant_isolation'
+                                END
+                                AND p.qual LIKE '%app.tenant_id%'
+                                AND p.with_check LIKE '%app.tenant_id%'
+                          )
+                        """
+                    )
+                ).scalar_one()
+                required_indexes = connection.execute(
+                    text(
+                        """
+                        SELECT count(*) = 3
+                        FROM pg_indexes
+                        WHERE schemaname = current_schema()
+                          AND indexname IN (
+                              'ix_rag_documents_metadata_gin',
+                              'ix_rag_chunks_search_tsv',
+                              'ix_rag_chunks_embedding_hnsw'
+                          )
+                        """
+                    )
+                ).scalar_one()
+                rag_rls_enforced = bool(protected_tables) and bool(required_indexes)
+
+        return True, bool(schema_present), bool(runtime_role_safe), bool(rag_rls_enforced)
     except Exception:
-        return False, False
+        return False, False, False, False
 
 
 @router.get("/health/ready")
 def readiness(
     response: Response, settings: Annotated[Settings, Depends(get_settings)]
 ) -> dict[str, object]:
-    database_reachable, required_schema_present = _database_health(settings)
+    database_reachable, required_schema_present, runtime_role_safe, rag_rls_enforced = (
+        _database_health(settings)
+    )
     jwks_reachable = identity_provider_ready(settings)
     checks = {
         "persistence_configured": settings.persistence_configured,
         "database_reachable": database_reachable,
         "required_schema_present": required_schema_present,
+        "database_role_not_bypass_rls": runtime_role_safe,
+        "rag_rls_enforced": not settings.rag_enabled or rag_rls_enforced,
         "authentication_configured": settings.auth_configured,
         "jwks_reachable": jwks_reachable,
         "rag_embedding_configured": not settings.rag_enabled or settings.embedding_configured,
@@ -144,9 +151,9 @@ def readiness(
         "status": "ready" if ready else "not_ready",
         "checks": checks,
         "note": (
-            "Readiness checks database connectivity, issuer-scoped identity schema, JWKS reachability, "
-            "and the schema/configuration of enabled RAG and MCP features. It does not replace "
-            "live token acceptance, cross-tenant integration tests, retrieval evaluation, or full "
-            "production acceptance."
+            "Readiness checks database connectivity, required schema, a non-superuser/non-BYPASSRLS "
+            "runtime role, forced tenant RLS and required RAG indexes when enabled, JWKS reachability, "
+            "and enabled RAG/MCP configuration. It does not replace live token acceptance, cross-tenant "
+            "integration tests, retrieval evaluation, or full production acceptance."
         ),
     }
