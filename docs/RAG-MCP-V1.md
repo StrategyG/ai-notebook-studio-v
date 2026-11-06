@@ -75,7 +75,7 @@ Enable MCP only after the API identity provider, PostgreSQL, RAG schema, embeddi
 ~~~bash
 MCP_ENABLED=true
 MCP_RESOURCE_SERVER_URL=https://api.example.com/mcp
-MCP_ALLOWED_HOSTS=api.example.com,api.example.com:443,api.example.com:*
+MCP_ALLOWED_HOSTS=api.example.com:443
 MCP_ALLOWED_ORIGINS=https://trusted-mcp-client.example
 ~~~
 
