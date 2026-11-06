@@ -31,6 +31,10 @@ def test_source_uri_accepts_https_and_urn_but_rejects_credential_bearing_urls() 
 def test_vector_literal_requires_the_database_embedding_dimension() -> None:
     with pytest.raises(ValueError, match="dimension"):
         _vector_literal([0.1, 0.2], dimensions=1536)
+    with pytest.raises(ValueError, match="non-finite"):
+        _vector_literal([float("nan")] * 1536, dimensions=1536)
+    with pytest.raises(ValueError, match="non-numeric"):
+        _vector_literal([True] + [0.0] * 1535, dimensions=1536)
 
 
 @pytest.mark.asyncio
