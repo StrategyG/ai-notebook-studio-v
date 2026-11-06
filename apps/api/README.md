@@ -84,7 +84,7 @@ Enable only when the API, database, identity provider, and embedding provider ar
 ~~~bash
 MCP_ENABLED=true
 MCP_RESOURCE_SERVER_URL=https://api.example.com/mcp
-MCP_ALLOWED_HOSTS=api.example.com,api.example.com:443,api.example.com:*
+MCP_ALLOWED_HOSTS=api.example.com:443
 MCP_ALLOWED_ORIGINS=https://trusted-mcp-client.example
 ~~~
 
@@ -121,7 +121,6 @@ Each run creates a unique evaluation tenant namespace and rolls back fixture wri
 | MRR@10 | 0.80 |
 | NDCG@10 | 0.85 |
 | Citation integrity rate | 1.00 |
-| Citation integrity | 1.00 |
 
 A failed metric exits non-zero. The small pinned dataset is a regression baseline; before release, supplement it with a representative, reviewed corpus and queries from the intended deployment domain.
 
