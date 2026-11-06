@@ -18,7 +18,6 @@ from ai_notebook_api.rag.service import RAGService
 from ai_notebook_api.security.auth import TokenVerificationError, verify_access_token
 from ai_notebook_api.security.tenant import (
     TENANT_ROLE_PERMISSIONS,
-    TenantAuthorizationError,
     resolve_active_membership,
 )
 
@@ -104,7 +103,7 @@ def _open_authorized_session(
         # RAGService re-establishes app.tenant_id before its next SQL statement.
         session.commit()
         return session, membership
-    except (TenantAuthorizationError, PermissionError):
+    except Exception:
         session.close()
         raise
 
