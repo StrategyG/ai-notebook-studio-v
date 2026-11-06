@@ -17,6 +17,7 @@ from ai_notebook_api.core.config import (
     validate_ugai_configuration,
 )
 from ai_notebook_api.mcp_server import build_mcp_server
+from ai_notebook_api.upload_limits import UploadBodyLimitMiddleware
 from ai_notebook_api.services.ugai_client import (
     OAuthTokenExchangeProvider,
     UGAITaskClient,
@@ -65,6 +66,7 @@ app = FastAPI(
     ),
     lifespan=lifespan,
 )
+app.add_middleware(UploadBodyLimitMiddleware)
 app.include_router(health_router)
 app.include_router(identity_router)
 app.include_router(tenant_router)
