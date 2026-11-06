@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: python-api-ci-${{ github.ref }}
+  group: python-api-ci-\${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -124,8 +124,8 @@ jobs:
                   digest = hashlib.sha256(content.encode()).hexdigest()
                   connection.execute(
                       "INSERT INTO rag_documents "
-                      "(id, tenant_id, title, source_uri, source_type, content, content_sha256, metadata, created_by) "
-                      "VALUES (%s, %s, %s, %s, 'manual', %s, %s, %s::jsonb, 'ci')",
+                      "(id, tenant_id, title, source_uri, source_type, embedding_model, content, content_sha256, metadata, created_by) "
+                      "VALUES (%s, %s, %s, %s, 'manual', 'fixture-embedding-v1', %s, %s, %s::jsonb, 'ci')",
                       (document_id, tenant_id, label, source_uri, content, digest, '{"area":"ci"}'),
                   )
                   connection.execute(
