@@ -287,3 +287,14 @@ def test_current_principal_rejects_invalid_verified_token(monkeypatch) -> None:
 
     assert error.value.status_code == 401
     assert error.value.headers["WWW-Authenticate"] == "Bearer"
+
+
+
+def test_identity_provider_readiness_fails_closed_when_jwks_fetch_raises(monkeypatch) -> None:
+    class BrokenJwks:
+        def get_signing_keys(self):
+            raise ConnectionError("private identity provider details")
+
+    monkeypatch.setattr(auth, "_jwks_client", lambda _url: BrokenJwks())
+
+    assert auth.identity_provider_ready(configured_settings()) is False
