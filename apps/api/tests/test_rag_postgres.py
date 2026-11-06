@@ -1,6 +1,6 @@
 import hashlib
 import os
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
