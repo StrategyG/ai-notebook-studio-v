@@ -229,8 +229,8 @@ class RAGService:
     ) -> dict[str, Any]:
         if not isinstance(query, str) or not query.strip() or len(query) > 2000:
             raise ValueError("query must contain between 1 and 2000 characters")
-        if not 1 <= limit <= 20:
-            raise ValueError("limit must be between 1 and 20")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 20:
+            raise ValueError("limit must be an integer between 1 and 20")
         if not embedding_model or len(embedding_model) > 128:
             raise ValueError("embedding_model must contain between 1 and 128 characters")
         metadata_json = _json_object(metadata_filter, maximum_bytes=4096)
