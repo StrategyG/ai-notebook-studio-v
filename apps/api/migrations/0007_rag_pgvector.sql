@@ -4,6 +4,22 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
+DO $
+DECLARE
+    installed_version text;
+BEGIN
+    SELECT extversion INTO installed_version
+    FROM pg_extension
+    WHERE extname = 'vector';
+
+    IF installed_version IS NULL
+       OR string_to_array(installed_version, '.')::integer[] < ARRAY[0, 8, 0]::integer[] THEN
+        RAISE EXCEPTION 'pgvector >= 0.8.0 is required for filtered iterative HNSW scans (found %)',
+            COALESCE(installed_version, 'not installed');
+    END IF;
+END
+$;
+
 CREATE TABLE IF NOT EXISTS rag_documents (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL,
