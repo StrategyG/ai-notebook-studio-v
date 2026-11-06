@@ -6,7 +6,12 @@ from mcp.client import Client
 
 from ai_notebook_api.core.config import Settings
 from ai_notebook_api.main import app
-from ai_notebook_api.mcp_server import MCP_ALLOWED_TOOLS, JWTTokenVerifier, build_mcp_server
+from ai_notebook_api.mcp_server import (
+    MCP_ALLOWED_TOOLS,
+    JWTTokenVerifier,
+    _register_allowlisted_tool,
+    build_mcp_server,
+)
 from ai_notebook_api.security.auth import Principal, TokenVerificationError
 
 
@@ -126,3 +131,33 @@ async def test_mcp_server_registers_only_the_allowlisted_tools() -> None:
         names = {tool.name for tool in (await client.list_tools()).tools}
 
     assert names == MCP_ALLOWED_TOOLS
+
+
+def test_mcp_tool_registration_enforces_the_explicit_allowlist() -> None:
+    class FakeServer:
+        def __init__(self) -> None:
+            self.registered: list[str] = []
+
+        def tool(self):
+            def register(handler):
+                self.registered.append(handler.__name__)
+                return handler
+
+            return register
+
+    async def rag_search():
+        return {}
+
+    async def rag_get_document():
+        return {}
+
+    async def arbitrary_shell():
+        return {}
+
+    server = FakeServer()
+    _register_allowlisted_tool(server, rag_search)
+    _register_allowlisted_tool(server, rag_get_document)
+
+    assert server.registered == ["rag_search", "rag_get_document"]
+    with pytest.raises(RuntimeError, match="not allowlisted"):
+        _register_allowlisted_tool(server, arbitrary_shell)
