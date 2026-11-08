@@ -28,6 +28,11 @@ No test below is marked PASS merely because a UI screen, code example, mocked re
 | AT-16 | Responsive Android/tablet/laptop/desktop | Playwright + Android browsers/emulator | Required viewports render without critical clipping; keyboard, zoom and touch targets meet UX contract | NOT VERIFIED |
 | AT-17 | Visual regression and interaction | Stable browser/OS versions and visual baselines | Workspace interactions pass; unexpected screenshot diffs are reviewed | NOT RUN |
 | AT-18 | Observability/cost/recovery | Staging deployment and dashboards | Correlated trace from user request through task/agent/tool; budgets, error rates, backups and restore validated | NOT RUN |
+| AT-19 | Document ingestion, chunking and real embeddings | PostgreSQL/pgvector staging database and configured embedding endpoint | Idempotent source ingestion; exact offsets and hashes; all chunk vectors have 1536 finite dimensions; provider failure does not create mock vectors | NOT RUN |
+| AT-20 | Hybrid retrieval quality | Versioned RAG evaluation dataset and isolated evaluation tenant | Recall@5 >= 0.90, MRR@10 >= 0.80, NDCG@10 >= 0.85 on the pinned 12-query dataset | NOT RUN |
+| AT-21 | Tenant-scoped RAG and metadata filtering | Two tenants, non-superuser runtime role with NOBYPASSRLS | Metadata filters narrow only the authorized tenant; cross-tenant SELECT and INSERT are denied by forced RLS | NOT RUN |
+| AT-22 | MCP authentication and tool allowlisting | Public Streamable HTTP MCP endpoint and independently authenticated client | Invalid/missing bearer token denied; issuer, audience and scope checked; only rag_search and rag_get_document are exposed; membership and role checked per call | NOT RUN |
+| AT-23 | Citation and source provenance | Ingested source with known content and chunk offsets | Document SHA-256, chunk SHA-256 and exact source offsets can be recomputed; altered/mismatched excerpts fail verification | NOT RUN |
 
 ## Required viewport matrix
 

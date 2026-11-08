@@ -79,6 +79,7 @@ def notebook_api():
     tenant_id = uuid4()
     subject = "issuer-scoped-user"
     principal = Principal(
+        issuer="https://identity.example/",
         subject=subject,
         tenant_id=tenant_id,
         roles=frozenset(),
