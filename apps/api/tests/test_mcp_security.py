@@ -10,10 +10,10 @@ from ai_notebook_api import mcp_server
 from ai_notebook_api.core.config import Settings
 from ai_notebook_api.main import app
 from ai_notebook_api.mcp_server import (
+       JWTTokenVerifier,
     MCP_ALLOWED_TOOLS,
     _open_authorized_session,
-    JWTTokenVerifier,
-    _register_allowlisted_tool,
+        _register_allowlisted_tool,
     _validate_required_scopes,
     build_mcp_server,
 )
